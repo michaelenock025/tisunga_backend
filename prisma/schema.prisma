@@ -1,0 +1,347 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  phone        String   @unique
+  firstName    String
+  lastName     String
+  middleName   String?
+  passwordHash String?
+  avatarUrl    String?
+  isVerified   Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  fcmToken     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  otps              OTP[]
+  memberships       GroupMembership[]
+  contributions     Contribution[]
+  loansAsBorrower   Loan[]            @relation("BorrowerLoans")
+  loansAsApprover   Loan[]            @relation("ApproverLoans")
+  notifications     Notification[]
+  eventContribs     EventContribution[]
+  refreshTokens     RefreshToken[]
+
+  @@index([phone])
+  @@map("users")
+}
+
+model OTP {
+  id        String     @id @default(uuid())
+  userId    String
+  otpHash   String
+  purpose   OtpPurpose
+  attempts  Int        @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime   @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("otps")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Group {
+  id                 String     @id @default(uuid())
+  name               String
+  description        String?
+  location           String?
+  groupCode          String     @unique
+  minContribution    Decimal    @db.Decimal(15, 2)
+  savingPeriodMonths Int
+  maxMembers         Int
+  visibility         Visibility @default(PUBLIC)
+  startDate          DateTime?
+  endDate            DateTime?
+  meetingDay         String?
+  meetingTime        String?
+  totalSavings       Decimal    @default(0) @db.Decimal(15, 2)
+  isActive           Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  memberships    GroupMembership[]
+  contributions  Contribution[]
+  loans          Loan[]
+  events         Event[]
+  transactions   Transaction[]
+  notifications  Notification[]
+  joinRequests   JoinRequest[]
+
+  @@index([groupCode])
+  @@index([visibility])
+  @@map("groups")
+}
+
+model GroupMembership {
+  id            String       @id @default(uuid())
+  groupId       String
+  userId        String
+  role          MemberRole   @default(MEMBER)
+  status        MemberStatus @default(ACTIVE)
+  memberSavings Decimal      @default(0) @db.Decimal(15, 2)
+  joinedAt      DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@map("group_memberships")
+}
+
+model JoinRequest {
+  id             String            @id @default(uuid())
+  groupId        String
+  userId         String
+  status         JoinRequestStatus @default(PENDING)
+  rejectedReason String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@index([userId])
+  @@map("join_requests")
+}
+
+model Contribution {
+  id             String           @id @default(uuid())
+  transactionRef String           @unique
+  userId         String
+  groupId        String
+  amount         Decimal          @db.Decimal(15, 2)
+  type           ContributionType @default(SAVINGS)
+  status         PaymentStatus    @default(PENDING)
+  paymentMethod  String?
+  phoneUsed      String?
+  externalRef    String?
+  failureReason  String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id])
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@index([userId])
+  @@index([groupId])
+  @@index([transactionRef])
+  @@map("contributions")
+}
+
+model Loan {
+  id               String     @id @default(uuid())
+  transactionRef   String     @unique
+  borrowerId       String
+  approverId       String?
+  groupId          String
+  principalAmount  Decimal    @db.Decimal(15, 2)
+  interestRate     Decimal    @db.Decimal(5, 2)
+  totalRepayable   Decimal    @db.Decimal(15, 2)
+  remainingBalance Decimal    @db.Decimal(15, 2)
+  durationMonths   Int
+  dueDate          DateTime?
+  approvedAt       DateTime?
+  disbursedAt      DateTime?
+  status           LoanStatus @default(PENDING)
+  rejectedReason   String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  borrower   User   @relation("BorrowerLoans", fields: [borrowerId], references: [id])
+  approver   User?  @relation("ApproverLoans", fields: [approverId], references: [id])
+  group      Group  @relation(fields: [groupId], references: [id])
+  repayments LoanRepayment[]
+
+  @@index([borrowerId])
+  @@index([groupId])
+  @@index([status])
+  @@map("loans")
+}
+
+model LoanRepayment {
+  id             String        @id @default(uuid())
+  loanId         String
+  transactionRef String        @unique
+  amount         Decimal       @db.Decimal(15, 2)
+  status         PaymentStatus @default(PENDING)
+  externalRef    String?
+  createdAt      DateTime      @default(now())
+
+  loan Loan @relation(fields: [loanId], references: [id])
+
+  @@index([loanId])
+  @@map("loan_repayments")
+}
+
+model Event {
+  id               String           @id @default(uuid())
+  groupId          String
+  title            String
+  type             EventType
+  eventDate        DateTime
+  contributionType ContributionType
+  fixedAmount      Decimal?         @db.Decimal(15, 2)
+  raisedSoFar      Decimal          @default(0) @db.Decimal(15, 2)
+  status           EventStatus      @default(UPCOMING)
+  description      String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  group         Group               @relation(fields: [groupId], references: [id])
+  contributions EventContribution[]
+
+  @@index([groupId])
+  @@index([status])
+  @@map("events")
+}
+
+model EventContribution {
+  id             String        @id @default(uuid())
+  eventId        String
+  userId         String
+  transactionRef String        @unique
+  amount         Decimal       @db.Decimal(15, 2)
+  status         PaymentStatus @default(PENDING)
+  createdAt      DateTime      @default(now())
+
+  event Event @relation(fields: [eventId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@index([eventId])
+  @@map("event_contributions")
+}
+
+model Transaction {
+  id           String          @id @default(uuid())
+  tisuRef      String          @unique
+  groupId      String
+  userId       String?
+  type         TransactionType
+  amount       Decimal         @db.Decimal(15, 2)
+  description  String
+  balanceAfter Decimal         @db.Decimal(15, 2)
+  relatedId    String?
+  createdAt    DateTime        @default(now())
+
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@index([groupId])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  groupId   String?
+  type      NotificationType
+  title     String
+  body      String
+  isRead    Boolean          @default(false)
+  data      Json?
+  createdAt DateTime         @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group? @relation(fields: [groupId], references: [id])
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+enum OtpPurpose      { 
+  REGISTRATION 
+  FORGOT_PASSWORD
+  LOGIN
+}
+enum Visibility      { 
+  PUBLIC 
+  PRIVATE
+   }
+enum MemberRole      { 
+  CHAIR 
+  SECRETARY 
+  MEMBER 
+  }
+enum MemberStatus    { 
+  ACTIVE 
+  INACTIVE
+   }
+enum JoinRequestStatus {
+   PENDING 
+   APPROVED 
+   REJECTED
+    }
+enum ContributionType {
+   SAVINGS
+   EVENT 
+   FLEXIBLE
+    }
+enum PaymentStatus   { 
+  PENDING 
+  CONFIRMED
+  FAILED 
+  }
+enum LoanStatus      { 
+  PENDING 
+  APPROVED 
+  ACTIVE 
+  COMPLETED 
+  REJECTED 
+  OVERDUE 
+  }
+enum EventType       { 
+  WEDDING 
+  BIRTHDAY 
+  FUNERAL 
+  OTHER
+   }
+enum EventStatus     { 
+  UPCOMING
+  ACTIVE 
+  CLOSED
+   }
+enum TransactionType { 
+  CONTRIBUTION 
+  LOAN_DISBURSEMENT 
+  LOAN_REPAYMENT 
+  EVENT_CONTRIBUTION 
+  WITHDRAWAL
+   }
+enum NotificationType { 
+  LOAN_APPROVED 
+  LOAN_REJECTED 
+  LOAN_DUE 
+  CONTRIBUTION_RECEIVED 
+  EVENT_CREATED 
+  EVENT_CLOSED 
+  MEMBER_JOINED 
+  GENERAL 
+  }

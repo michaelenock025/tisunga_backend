@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.local
+logs/
+*.log
+uploads/
+coverage/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+prisma/migrations/*.sql.bak
