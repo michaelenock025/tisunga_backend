@@ -11,7 +11,7 @@ const { logger } = require('../utils/logger');
 const OTP_EXPIRY_MINUTES = 10;
 const SALT_ROUNDS = 12;
 
-// ── POST /auth/register ────────────────────────────────
+//POST /auth/register
 async function register(req, res, next) {
   try {
     const { phone, firstName, lastName, middleName } = req.body;
@@ -37,7 +37,7 @@ async function register(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── POST /auth/verify-otp ──────────────────────────────
+// POST /auth/verify-otp
 async function verifyOtp(req, res, next) {
   try {
     const { userId, otp, purpose } = req.body;
@@ -67,7 +67,7 @@ async function verifyOtp(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── POST /auth/resend-otp ──────────────────────────────
+//POST /auth/resend-otp
 async function resendOtp(req, res, next) {
   try {
     const { userId, purpose } = req.body;
@@ -79,7 +79,7 @@ async function resendOtp(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── POST /auth/set-password ────────────────────────────
+// POST /auth/set-password
 async function setPassword(req, res, next) {
   try {
     const { userId, password } = req.body;
@@ -96,7 +96,7 @@ async function setPassword(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── POST /auth/login ───────────────────────────────────
+// POST /auth/login 
 async function login(req, res, next) {
   try {
     const { phone, password } = req.body;
@@ -122,7 +122,7 @@ async function login(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── POST /auth/refresh ─────────────────────────────────
+//POST /auth/refresh 
 async function refresh(req, res, next) {
   try {
     const { refreshToken } = req.body;
@@ -142,7 +142,7 @@ async function refresh(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── POST /auth/forgot-password ─────────────────────────
+//POST /auth/forgot-password 
 async function forgotPassword(req, res, next) {
   try {
     const { phone } = req.body;
@@ -157,7 +157,7 @@ async function forgotPassword(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── POST /auth/reset-password ──────────────────────────
+// POST /auth/reset-password 
 async function resetPassword(req, res, next) {
   try {
     const { userId, newPassword } = req.body;
@@ -171,7 +171,7 @@ async function resetPassword(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── POST /auth/logout ──────────────────────────────────
+//  POST /auth/logout 
 async function logout(req, res, next) {
   try {
     const { refreshToken } = req.body;
@@ -183,7 +183,7 @@ async function logout(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── Private helpers ────────────────────────────────────
+//Private helpers 
 async function _sendOTP(userId, phone, purpose) {
   const otp     = generateOTP();
   const otpHash = crypto.createHash('sha256').update(otp).digest('hex');

@@ -30,5 +30,48 @@ async function authenticate(req, _res, next) {
   }
 }
 
+function requireGroupMember(paramName = 'groupId') {
+  return async (req, _res, next) => {
+    try {
+      const groupId = req.params[paramName];
+      const userId = req.user.id;
 
-module.exports = { authenticate };
+      const membership = await prisma.groupMembership.findUnique({
+        where: { groupId_userId: { groupId, userId } },
+      });
+
+      if (!membership || membership.status !== 'ACTIVE') {
+        throw new AppError('You are not an active member of this group', 403);
+      }
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+
+function requireGroupRole(...roles) {
+  return async (req, _res, next) => {
+    try {
+      const groupId = req.params['groupId'] || req.body?.groupId;
+      const userId = req.user.id;
+
+      const membership = await prisma.groupMembership.findUnique({
+        where: { groupId_userId: { groupId, userId } },
+      });
+
+      if (!membership || !roles.includes(membership.role)) {
+        throw new AppError(
+          `This action requires one of the following roles: ${roles.join(', ')}`,
+          403
+        );
+      }
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+module.exports = { authenticate, requireGroupMember, requireGroupRole };
