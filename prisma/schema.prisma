@@ -1,4 +1,4 @@
-// prisma/schema.prisma
+// prisma/schema.prisma  —  TISUNGA v2
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,6 +7,10 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+
+//  USERS
+
 
 model User {
   id           String   @id @default(uuid())
@@ -30,6 +34,10 @@ model User {
   notifications     Notification[]
   eventContribs     EventContribution[]
   refreshTokens     RefreshToken[]
+  meetingsCreated   Meeting[]         @relation("MeetingCreator")
+  attendanceRecords MeetingAttendance[]
+  disbursementsReq  Disbursement[]    @relation("DisbursementRequester")
+  disbursementsApp  Disbursement[]    @relation("DisbursementApprover")
 
   @@index([phone])
   @@map("users")
@@ -64,35 +72,37 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+
+//  GROUP
+
+
 model Group {
-  id                 String     @id @default(uuid())
+  id                 String  @id @default(uuid())
   name               String
   description        String?
   location           String?
-  groupCode          String     @unique
-  minContribution    Decimal    @db.Decimal(15, 2)
+  groupCode          String  @unique
+  minContribution    Decimal @db.Decimal(15, 2)
   savingPeriodMonths Int
   maxMembers         Int
-  visibility         Visibility @default(PUBLIC)
   startDate          DateTime?
   endDate            DateTime?
   meetingDay         String?
   meetingTime        String?
-  totalSavings       Decimal    @default(0) @db.Decimal(15, 2)
-  isActive           Boolean    @default(true)
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  totalSavings       Decimal  @default(0) @db.Decimal(15, 2)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  memberships    GroupMembership[]
-  contributions  Contribution[]
-  loans          Loan[]
-  events         Event[]
-  transactions   Transaction[]
-  notifications  Notification[]
-  joinRequests   JoinRequest[]
+  memberships   GroupMembership[]
+  contributions Contribution[]
+  loans         Loan[]
+  events        Event[]
+  transactions  Transaction[]
+  notifications Notification[]
+  meetings      Meeting[]
+  disbursements Disbursement[]
 
-  @@index([groupCode])
-  @@index([visibility])
   @@map("groups")
 }
 
@@ -115,21 +125,9 @@ model GroupMembership {
   @@map("group_memberships")
 }
 
-model JoinRequest {
-  id             String            @id @default(uuid())
-  groupId        String
-  userId         String
-  status         JoinRequestStatus @default(PENDING)
-  rejectedReason String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
 
-  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+//  SAVINGS & CONTRIBUTIONS
 
-  @@index([groupId])
-  @@index([userId])
-  @@map("join_requests")
-}
 
 model Contribution {
   id             String           @id @default(uuid())
@@ -139,7 +137,6 @@ model Contribution {
   amount         Decimal          @db.Decimal(15, 2)
   type           ContributionType @default(SAVINGS)
   status         PaymentStatus    @default(PENDING)
-  paymentMethod  String?
   phoneUsed      String?
   externalRef    String?
   failureReason  String?
@@ -151,9 +148,13 @@ model Contribution {
 
   @@index([userId])
   @@index([groupId])
-  @@index([transactionRef])
+  @@index([externalRef])
   @@map("contributions")
 }
+
+
+//  LOANS
+
 
 model Loan {
   id               String     @id @default(uuid())
@@ -166,6 +167,7 @@ model Loan {
   totalRepayable   Decimal    @db.Decimal(15, 2)
   remainingBalance Decimal    @db.Decimal(15, 2)
   durationMonths   Int
+  purpose          String?
   dueDate          DateTime?
   approvedAt       DateTime?
   disbursedAt      DateTime?
@@ -174,9 +176,9 @@ model Loan {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  borrower   User   @relation("BorrowerLoans", fields: [borrowerId], references: [id])
-  approver   User?  @relation("ApproverLoans", fields: [approverId], references: [id])
-  group      Group  @relation(fields: [groupId], references: [id])
+  borrower   User            @relation("BorrowerLoans", fields: [borrowerId], references: [id])
+  approver   User?           @relation("ApproverLoans", fields: [approverId], references: [id])
+  group      Group           @relation(fields: [groupId], references: [id])
   repayments LoanRepayment[]
 
   @@index([borrowerId])
@@ -197,8 +199,13 @@ model LoanRepayment {
   loan Loan @relation(fields: [loanId], references: [id])
 
   @@index([loanId])
+  @@index([externalRef])
   @@map("loan_repayments")
 }
+
+
+//  EVENTS
+
 
 model Event {
   id               String           @id @default(uuid())
@@ -218,7 +225,6 @@ model Event {
   contributions EventContribution[]
 
   @@index([groupId])
-  @@index([status])
   @@map("events")
 }
 
@@ -229,14 +235,91 @@ model EventContribution {
   transactionRef String        @unique
   amount         Decimal       @db.Decimal(15, 2)
   status         PaymentStatus @default(PENDING)
+  externalRef    String?
   createdAt      DateTime      @default(now())
 
   event Event @relation(fields: [eventId], references: [id])
   user  User  @relation(fields: [userId], references: [id])
 
   @@index([eventId])
+  @@index([externalRef])
   @@map("event_contributions")
 }
+
+
+//  MEETINGS
+
+
+model Meeting {
+  id          String        @id @default(uuid())
+  groupId     String
+  createdBy   String
+  title       String
+  agenda      String?
+  location    String?
+  scheduledAt DateTime
+  status      MeetingStatus @default(SCHEDULED)
+  notifiedAt  DateTime?
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  group      Group               @relation(fields: [groupId], references: [id])
+  creator    User                @relation("MeetingCreator", fields: [createdBy], references: [id])
+  attendance MeetingAttendance[]
+
+  @@index([groupId])
+  @@index([scheduledAt])
+  @@map("meetings")
+}
+
+model MeetingAttendance {
+  id        String           @id @default(uuid())
+  meetingId String
+  userId    String
+  status    AttendanceStatus @default(ABSENT)
+  markedAt  DateTime?
+  markedBy  String?
+  note      String?
+  createdAt DateTime         @default(now())
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([meetingId, userId])
+  @@index([meetingId])
+  @@map("meeting_attendance")
+}
+
+
+//  DISBURSEMENT
+
+
+model Disbursement {
+  id             String             @id @default(uuid())
+  groupId        String
+  requestedBy    String
+  approvedBy     String?
+  totalAmount    Decimal            @db.Decimal(15, 2)
+  status         DisbursementStatus @default(PENDING)
+  rejectedReason String?
+  requestedAt    DateTime           @default(now())
+  processedAt    DateTime?
+  memberShares   Json
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  group     Group  @relation(fields: [groupId], references: [id])
+  requester User   @relation("DisbursementRequester", fields: [requestedBy], references: [id])
+  approver  User?  @relation("DisbursementApprover", fields: [approvedBy], references: [id])
+
+  @@index([groupId])
+  @@map("disbursements")
+}
+
+
+//  TRANSACTIONS
+
 
 model Transaction {
   id           String          @id @default(uuid())
@@ -257,6 +340,10 @@ model Transaction {
   @@map("transactions")
 }
 
+
+//  NOTIFICATIONS
+
+
 model Notification {
   id        String           @id @default(uuid())
   userId    String
@@ -276,72 +363,113 @@ model Notification {
   @@map("notifications")
 }
 
-enum OtpPurpose      { 
-  REGISTRATION 
+
+//  ENUMS
+
+
+enum OtpPurpose {
+  REGISTRATION
   FORGOT_PASSWORD
   LOGIN
 }
-enum Visibility      { 
-  PUBLIC 
+
+enum Visibility {
+  PUBLIC
   PRIVATE
-   }
-enum MemberRole      { 
-  CHAIR 
-  SECRETARY 
-  MEMBER 
-  }
-enum MemberStatus    { 
-  ACTIVE 
+}
+
+enum MemberRole {
+  CHAIR
+  SECRETARY
+  TREASURER
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
   INACTIVE
-   }
+}
+
 enum JoinRequestStatus {
-   PENDING 
-   APPROVED 
-   REJECTED
-    }
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum ContributionType {
-   SAVINGS
-   EVENT 
-   FLEXIBLE
-    }
-enum PaymentStatus   { 
-  PENDING 
+  SAVINGS
+  EVENT
+  FLEXIBLE
+}
+
+enum PaymentStatus {
+  PENDING
   CONFIRMED
-  FAILED 
-  }
-enum LoanStatus      { 
-  PENDING 
-  APPROVED 
-  ACTIVE 
-  COMPLETED 
-  REJECTED 
-  OVERDUE 
-  }
-enum EventType       { 
-  WEDDING 
-  BIRTHDAY 
-  FUNERAL 
+  FAILED
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  ACTIVE
+  COMPLETED
+  REJECTED
+  OVERDUE
+}
+
+enum EventType {
+  WEDDING
+  BIRTHDAY
+  FUNERAL
   OTHER
-   }
-enum EventStatus     { 
+}
+
+enum EventStatus {
   UPCOMING
-  ACTIVE 
+  ACTIVE
   CLOSED
-   }
-enum TransactionType { 
-  CONTRIBUTION 
-  LOAN_DISBURSEMENT 
-  LOAN_REPAYMENT 
-  EVENT_CONTRIBUTION 
+}
+
+enum TransactionType {
+  CONTRIBUTION
+  LOAN_DISBURSEMENT
+  LOAN_REPAYMENT
+  EVENT_CONTRIBUTION
+  DISBURSEMENT
   WITHDRAWAL
-   }
-enum NotificationType { 
-  LOAN_APPROVED 
-  LOAN_REJECTED 
-  LOAN_DUE 
-  CONTRIBUTION_RECEIVED 
-  EVENT_CREATED 
-  EVENT_CLOSED 
-  MEMBER_JOINED 
-  GENERAL 
-  }
+}
+
+enum DisbursementStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  EXCUSED
+}
+
+enum NotificationType {
+  LOAN_APPROVED
+  LOAN_REJECTED
+  LOAN_DUE
+  CONTRIBUTION_RECEIVED
+  EVENT_CREATED
+  EVENT_CLOSED
+  MEMBER_JOINED
+  DISBURSEMENT_REQUESTED
+  DISBURSEMENT_APPROVED
+  DISBURSEMENT_REJECTED
+  MEETING_REMINDER
+  GENERAL
+}

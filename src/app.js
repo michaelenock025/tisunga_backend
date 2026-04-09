@@ -13,7 +13,8 @@ const { swaggerSpec } = require('./config/swagger');
 const { logger } = require('./utils/logger');
 
 const authRoutes         = require('./routes/auth.routes');
-
+const userRoutes         = require('./routes/user.routes');
+const groupRoutes        = require('./routes/group.routes');
 
 const app = express();
 
@@ -47,9 +48,9 @@ app.get('/health', (_req, res) => {
 
 // Routes 
 app.use('/api/v1/auth',          authRoutes);
-/*app.use('/api/v1/users' );
-app.use('/api/v1/groups');
-app.use('/api/v1/contributions');
+app.use('/api/v1/users',        userRoutes);
+app.use('/api/v1/groups',       groupRoutes );
+/*app.use('/api/v1/contributions');
 app.use('/api/v1/loans');
 app.use('/api/v1/events');
 app.use('/api/v1/notifications');
