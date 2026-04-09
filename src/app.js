@@ -15,6 +15,8 @@ const { logger } = require('./utils/logger');
 const authRoutes         = require('./routes/auth.routes');
 const userRoutes         = require('./routes/user.routes');
 const groupRoutes        = require('./routes/group.routes');
+const contributionRoutes = require('./routes/contribution.routes');
+const webhookRoutes      = require('./routes/webhook.routes');
 
 const app = express();
 
@@ -50,13 +52,17 @@ app.get('/health', (_req, res) => {
 app.use('/api/v1/auth',          authRoutes);
 app.use('/api/v1/users',        userRoutes);
 app.use('/api/v1/groups',       groupRoutes );
-/*app.use('/api/v1/contributions');
+app.use('/api/v1/contributions', contributionRoutes );
+app.use('/api/v1/webhooks', webhookRoutes);
+/*
 app.use('/api/v1/loans');
 app.use('/api/v1/events');
+app.use('/api/v1/meetings',);
 app.use('/api/v1/notifications');
-app.use('/api/v1/transactions');
-app.use('/api/v1/webhooks');
+app.use('/api/v1/disbursements',);
 */
+
+
 //Error Handling
 app.use(notFound);
 app.use(errorHandler);
