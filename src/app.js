@@ -56,6 +56,9 @@ app.use('/api/v1/users',        userRoutes);
 app.use('/api/v1/groups',       groupRoutes );
 app.use('/api/v1/contributions', contributionRoutes );
 app.use('/api/v1/webhooks', webhookRoutes);
+
+app.use('/api/v1/meetings', meetingRoutes);
+
 /*
 app.use('/api/v1/loans');
 app.use('/api/v1/events');
