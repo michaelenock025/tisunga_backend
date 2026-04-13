@@ -16,6 +16,7 @@ const authRoutes         = require('./routes/auth.routes');
 const userRoutes         = require('./routes/user.routes');
 const groupRoutes        = require('./routes/group.routes');
 const contributionRoutes = require('./routes/contribution.routes');
+const meetingRoutes      = require('./routes/meeting.routes');
 const webhookRoutes      = require('./routes/webhook.routes');
 
 const app = express();
@@ -54,6 +55,7 @@ app.use('/api/v1/users',        userRoutes);
 app.use('/api/v1/groups',       groupRoutes );
 app.use('/api/v1/contributions', contributionRoutes );
 app.use('/api/v1/webhooks', webhookRoutes);
+app.use('/api/v1/meetings', meetingRoutes );
 /*
 app.use('/api/v1/loans');
 app.use('/api/v1/events');
