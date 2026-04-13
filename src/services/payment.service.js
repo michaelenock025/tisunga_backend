@@ -2,7 +2,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { logger } = require('../utils/logger');
 
-// ── Phone helpers ─────────────────────────────────────────────────────────────
+//Phone helpers 
 
 function toMsisdn(phone) {
   const clean = String(phone).replace(/[\s\-+]/g, '');
@@ -27,8 +27,7 @@ function getCorrespondent(phone) {
   return 'AIRTEL_MALAWI';
 }
 
-// ── pawaPay Provider ──────────────────────────────────────────────────────────
-
+//  pawaPay Provider 
 class PawaPayProvider {
   constructor() {
     this.baseUrl  = process.env.PAWAPAY_BASE_URL || 'https://api.sandbox.pawapay.io';
@@ -138,7 +137,7 @@ class PawaPayProvider {
   }
 }
 
-// ── Mock (dev) ────────────────────────────────────────────────────────────────
+//  Mock (dev) 
 
 class MockPaymentProvider {
   async collectPayment(phone, amount, ref) {
@@ -153,7 +152,7 @@ class MockPaymentProvider {
   }
 }
 
-// ── Export ────────────────────────────────────────────────────────────────────
+//  Export 
 
 const paymentService = process.env.NODE_ENV === 'production'
   ? new PawaPayProvider()
