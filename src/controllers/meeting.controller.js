@@ -65,7 +65,7 @@ async function createMeeting(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── GET /groups/:groupId/meetings ──────────────────────
+// ── GET /groups/:groupId/meetings
 async function getGroupMeetings(req, res, next) {
   try {
     const { groupId } = req.params;
