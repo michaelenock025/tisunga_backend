@@ -6,7 +6,7 @@ const { createNotification } = require('../services/notification.service');
 const { smsService } = require('../services/sms.service');
 const { logger } = require('../utils/logger');
 
-//  Helper: find a user's active membership (replaces findUnique({ userId })) ─
+//  Helper: find a user's active membership (replaces findUnique({ userId })) 
 // Since userId is no longer @unique on GroupMembership, we use findFirst.
 async function findMembershipByUserId(userId) {
   return prisma.groupMembership.findFirst({
@@ -96,7 +96,58 @@ async function getMyGroup(req, res, next) {
   } catch (err) { next(err); }
 }
 
-//  GET /groups/:groupId ─ basic group info (for members and non-members)
+
+async function getMemberSavings(req, res, next) {
+  try {
+    const { groupId } = req.params;
+
+    const memberships = await prisma.groupMembership.findMany({
+      where:   { groupId, status: 'ACTIVE' },
+      select:  {
+        userId:       true,
+        role:         true,
+        memberSavings: true,
+        user: {
+          select: { id: true, firstName: true, lastName: true, phone: true },
+        },
+      },
+      orderBy: [{ role: 'asc' }, { memberSavings: 'desc' }],
+    });
+
+    // For each member whose stored memberSavings is 0, compute it from confirmed
+    // contributions (handles the case where the webhook hasn't fired yet).
+    const results = await Promise.all(
+      memberships.map(async (m) => {
+        const stored = parseFloat(m.memberSavings?.toString() ?? '0');
+        let savings  = stored;
+
+        if (stored === 0) {
+          const agg = await prisma.contribution.aggregate({
+            where: { groupId, userId: m.userId, status: 'CONFIRMED' },
+            _sum:  { amount: true },
+          });
+          savings = parseFloat(agg._sum.amount?.toString() ?? '0');
+        }
+
+        return {
+          userId:   m.user.id,
+          userName: `${m.user.firstName} ${m.user.lastName}`.trim(),
+          userPhone: m.user.phone,
+          role:     m.role,
+          amount:   savings,
+        };
+      })
+    );
+
+    // Sort by savings descending so top savers appear first
+    results.sort((a, b) => b.amount - a.amount);
+
+    return sendSuccess(res, results);
+  } catch (err) { next(err); }
+}
+
+
+//  GET /groups/:groupId  basic group info (for members and non-members)
 
 async function getGroup(req, res, next) {
   try {
@@ -166,7 +217,7 @@ async function getGroupDashboard(req, res, next) {
   } catch (err) { next(err); }
 }
 
-//  PATCH /groups/:groupId ─
+//  PATCH /groups/:groupId 
 
 async function updateGroup(req, res, next) {
   try {
@@ -273,7 +324,7 @@ async function addMember(req, res, next) {
   } catch (err) { next(err); }
 }
 
-//  GET /groups/:groupId/members ─
+//  GET /groups/:groupId/members 
 
 async function getMembers(req, res, next) {
   try {
@@ -299,7 +350,7 @@ async function getMembers(req, res, next) {
   } catch (err) { next(err); }
 }
 
-//  PATCH /groups/:groupId/members/:userId ─
+//  PATCH /groups/:groupId/members/:userId 
 
 async function updateMember(req, res, next) {
   try {
@@ -392,5 +443,5 @@ async function searchMemberByPhone(req, res, next) {
 
 module.exports = {
   createGroup, getMyGroup, getGroup, getGroupDashboard, updateGroup,
-  addMember, getMembers, updateMember, removeMember, searchMemberByPhone,
+  addMember, getMembers, updateMember, removeMember, searchMemberByPhone, getMemberSavings
 };

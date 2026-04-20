@@ -1,7 +1,7 @@
 
 const { Router } = require('express');
 const { authenticate, requireGroupMember, requireGroupRole } = require('../middleware/authenticate');
-const { createGroup, getMyGroup, getGroup, getGroupDashboard, updateGroup, addMember, getMembers, updateMember, removeMember, searchMemberByPhone, } = require('../controllers/group.controller');
+const { createGroup, getMyGroup, getGroup, getGroupDashboard, updateGroup, addMember, getMembers, getMemberSavings, updateMember, removeMember, searchMemberByPhone, } = require('../controllers/group.controller');
 const { getGroupContributions } = require('../controllers/contribution.controller');
 const { getGroupLoans }         = require('../controllers/loan.controller');
 const { getGroupEvents, createEvent } = require('../controllers/event.controller');
@@ -39,6 +39,7 @@ router.get('/:groupId/dashboard', requireGroupMember(), getGroupDashboard);
  */
 router.post('/:groupId/members',               requireGroupRole('CHAIR'), addMember);
 router.get('/:groupId/members',                requireGroupMember(), getMembers);
+router.get('/:groupId/members/savings',        requireGroupMember(), getMemberSavings);
 router.patch('/:groupId/members/:userId',      requireGroupRole('CHAIR'), updateMember);
 router.delete('/:groupId/members/:userId',     requireGroupRole('CHAIR'), removeMember);
 
