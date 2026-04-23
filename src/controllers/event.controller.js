@@ -18,7 +18,7 @@ async function createEvent(req, res, next) {
     const event = await prisma.event.create({
       data: {
         groupId, title, type,
-        eventDate:        new Date(eventDate),
+        eventDate:        new Date (eventDate),
         contributionType: contributionType || 'FLEXIBLE',
         fixedAmount:      fixedAmount ? parseFloat(fixedAmount) : undefined,
         description,
