@@ -197,7 +197,6 @@ async function confirmEventContribWebhook(transactionRef, status) {
 }
 
 
-// ── PATCH /events/:eventId/close ─────────────────────────────────────────────
 async function closeEvent(req, res, next) {
   try {
     const { eventId } = req.params;
