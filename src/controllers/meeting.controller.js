@@ -1,5 +1,5 @@
 // src/controllers/meeting.controller.js  — TISUNGA v2
-// Meetings: Chair creates → SMS sent to all members → Chair marks attendance live.
+// Meetings: Chair creates  SMS sent to all members hair marks attendance live.
 
 const prisma = require('../config/prisma');
 const { AppError, sendSuccess } = require('../utils/AppError');
@@ -8,7 +8,7 @@ const { smsService } = require('../services/sms.service');
 const { createNotification, notifyGroupMembers } = require('../services/notification.service');
 const { logger } = require('../utils/logger');
 
-// ── POST /groups/:groupId/meetings ─────────────────────
+// ── POST /groups/:groupId/meetings 
 // Chair creates a meeting. All active members are notified by SMS + push.
 async function createMeeting(req, res, next) {
   try {
@@ -103,7 +103,7 @@ async function getGroupMeetings(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── GET /groups/:groupId/meetings/:meetingId ───────────
+// ── GET /groups/:groupId/meetings/:meetingId
 async function getMeeting(req, res, next) {
   try {
     const { meetingId } = req.params;
@@ -188,7 +188,7 @@ async function markAttendance(req, res, next) {
 
     const validStatuses = ['PRESENT', 'ABSENT', 'EXCUSED', 'LATE'];
 
-    // ── Bulk submission ────────────────────────────────
+    // ── Bulk submission 
     if (req.body.attendance && Array.isArray(req.body.attendance)) {
       const entries = req.body.attendance;
 
@@ -231,7 +231,7 @@ async function markAttendance(req, res, next) {
       return sendSuccess(res, { updated: updates.length, presentCount }, 'Attendance submitted');
     }
 
-    // ── Single member ──────────────────────────────────
+    // ── Single member 
     const { userId, status, note } = req.body;
     if (!userId || !status) throw new AppError('userId and status are required', 400);
     if (!validStatuses.includes(status.toUpperCase())) {

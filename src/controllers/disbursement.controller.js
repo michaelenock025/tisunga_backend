@@ -215,7 +215,7 @@ async function rejectDisbursement(req, res, next) {
       data: { status: 'REJECTED', approvedBy: req.user.id, rejectedReason: reason },
     });
 
-    // Notify the chair
+    // the chair is notified
     await createNotification({
       userId:  disbursement.requestedBy,
       groupId,

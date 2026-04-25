@@ -6,7 +6,7 @@ const { logger } = require('../utils/logger');
 async function transitionEventStatuses() {
   const now = new Date();
 
-  // ── UPCOMING → ACTIVE ─────────────────────────────────
+  // ── UPCOMING → ACTIVE 
   const toActive = await prisma.event.updateMany({
     where: { status: 'UPCOMING', eventDate: { lte: now } },
     data:  { status: 'ACTIVE' },
@@ -15,7 +15,7 @@ async function transitionEventStatuses() {
     logger.info(`Transitioned ${toActive.count} events UPCOMING → ACTIVE`);
   }
 
-  // ── ACTIVE → CLOSED (event date > 1 day ago) ──────────
+  // ── ACTIVE → CLOSED (event date > 1 day ago) 
   const closingDate = new Date(now);
   closingDate.setDate(closingDate.getDate() - 1);
 

@@ -9,7 +9,7 @@ const ALERT_DAYS_BEFORE = 7;
 async function checkOverdueLoans() {
   const now = new Date();
 
-  // ── Mark overdue ──────────────────────────────────────
+  // ── Mark overdue 
   const overdueResult = await prisma.loan.updateMany({
     where: { status: 'ACTIVE', dueDate: { lt: now } },
     data:  { status: 'OVERDUE' },
@@ -19,7 +19,7 @@ async function checkOverdueLoans() {
     logger.info(`Marked ${overdueResult.count} loans as OVERDUE`);
   }
 
-  // ── Send due-soon reminders ───────────────────────────
+  // ── Send due-soon reminders 
   const alertDate = new Date();
   alertDate.setDate(alertDate.getDate() + ALERT_DAYS_BEFORE);
 
