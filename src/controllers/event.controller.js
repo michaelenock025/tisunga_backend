@@ -67,7 +67,7 @@ async function getEvent(req, res, next) {
         },
       },
     });
-    if (!event) throw new AppError('Event not found', 404);
+    if (!event) throw new AppError('Event is not found', 404);
     return sendSuccess(res, event);
   } catch (err) { next(err); }
 }
@@ -78,13 +78,13 @@ async function contributeToEvent(req, res, next) {
     const { amount, phone } = req.body;
     const userId = req.user.id;
 
-    if (!amount || !phone) throw new AppError('amount and phone are required', 400);
+    if (!amount || !phone) throw new AppError('amount and phone are required here', 400);
 
     const event = await prisma.event.findUnique({
       where:   { id: eventId },
       include: { group: true },
     });
-    if (!event)                    throw new AppError('Event not found', 404);
+    if (!event)                    throw new AppError('Event is not found', 404);
     if (event.status === 'CLOSED') throw new AppError('This event is closed', 400);
 
     const contribution = parseFloat(amount);
@@ -125,7 +125,7 @@ async function contributeToEvent(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── Called by webhook handler ─────────────────────────────────────────────────
+// Called by webhook handler 
 // Supports lookup by transactionRef (internal) OR externalRef (pawaPay depositId)
 
 async function confirmEventContribWebhook(transactionRef, status) {
@@ -142,7 +142,7 @@ async function confirmEventContribWebhook(transactionRef, status) {
   }
 
   if (!contrib) {
-    // Fallback: look up by externalRef if transactionRef not found
+    
     // (webhook controller may pass transactionRef = externalRef in some paths)
     contrib = await prisma.eventContribution.findFirst({
       where:   { externalRef: transactionRef, status: 'PENDING' },
