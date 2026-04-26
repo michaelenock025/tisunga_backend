@@ -6,12 +6,69 @@ const { createNotification } = require('../services/notification.service');
 const { smsService } = require('../services/sms.service');
 const { logger } = require('../utils/logger');
 
-//  Helper: find a user's active membership (replaces findUnique({ userId })) ─
-// Since userId is no longer @unique on GroupMembership, we use findFirst.
+//  Helper: find a user's active membership
 async function findMembershipByUserId(userId) {
   return prisma.groupMembership.findFirst({
     where: { userId, status: 'ACTIVE' },
   });
+}
+
+// ── Helper: compute reliable totalSavings from confirmed contributions ─────────
+//
+// WHY THIS EXISTS:
+//   group.totalSavings is a running total that is incremented/decremented by
+//   the pawaPay webhook.  In local / test environments the webhook URL is
+//   typically unreachable, so contributions stay PENDING and totalSavings stays
+//   0 even though members have genuinely saved.
+//
+//   This helper computes the real figure directly from the contributions table:
+//     realTotal = SUM(confirmed contributions) - SUM(principal of active loans)
+
+
+async function computeReliableSavings(groupId, storedTotalSavings) {
+  const stored = parseFloat(storedTotalSavings?.toString() ?? '0');
+
+  // Fast path: if the stored value is already positive, trust it.
+  if (stored > 0) return stored;
+
+  // Fallback: compute from confirmed contributions minus active loan principal
+  const [contribResult, loanResult] = await Promise.all([
+    prisma.contribution.aggregate({
+      where: { groupId, status: 'CONFIRMED' },
+      _sum:  { amount: true },
+    }),
+    prisma.loan.aggregate({
+      where: { groupId, status: { in: ['ACTIVE'] } },
+      _sum:  { principalAmount: true },
+    }),
+  ]);
+
+  const totalContributed = parseFloat(contribResult._sum.amount?.toString() ?? '0');
+  const totalLoaned      = parseFloat(loanResult._sum.principalAmount?.toString() ?? '0');
+  const computed         = Math.max(0, totalContributed - totalLoaned);
+
+  return Math.max(stored, computed);
+}
+
+//  GET /groups — discover public/open groups
+
+async function getGroups(req, res, next) {
+  try {
+    const { page = '1', limit = '20', search = '' } = req.query;
+    const { take, skip } = paginate(parseInt(page), parseInt(limit));
+
+    const groups = await prisma.group.findMany({
+      where: {
+        isActive: true,
+        ...(search && { name: { contains: search, mode: 'insensitive' } }),
+      },
+      include: { _count: { select: { memberships: true } } },
+      orderBy: { createdAt: 'desc' },
+      take, skip,
+    });
+
+    return sendSuccess(res, groups);
+  } catch (err) { next(err); }
 }
 
 //  POST /groups
@@ -30,13 +87,11 @@ async function createGroup(req, res, next) {
 
     const chairId = req.user.id;
 
-    // One-group-per-user check
     const existingMembership = await findMembershipByUserId(chairId);
     if (existingMembership) {
       throw new AppError('You already belong to a group. A member can only be in one group at a time.', 409);
     }
 
-    // Generate a unique group code
     let groupCode;
     let exists;
     do {
@@ -66,7 +121,7 @@ async function createGroup(req, res, next) {
   } catch (err) { next(err); }
 }
 
-//  GET /groups/my-group
+//  GET /groups/my
 
 async function getMyGroup(req, res, next) {
   try {
@@ -81,22 +136,44 @@ async function getMyGroup(req, res, next) {
       return sendSuccess(res, null, 'User does not belong to any group');
     }
 
+    // FIX: compute reliable totalSavings so the home screen and savings screen
+    //      show the real balance even when the webhook hasn't fired yet.
+    const reliableTotalSavings = await computeReliableSavings(
+      membership.group.id,
+      membership.group.totalSavings
+    );
+
+    // Also compute personal savings from confirmed contributions when
+    // memberSavings is 0 (same webhook issue)
+    const storedMySavings = parseFloat(membership.memberSavings?.toString() ?? '0');
+    let reliableMySavings = storedMySavings;
+    if (storedMySavings === 0) {
+      const personal = await prisma.contribution.aggregate({
+        where: { groupId: membership.group.id, userId: req.user.id, status: 'CONFIRMED' },
+        _sum:  { amount: true },
+      });
+      reliableMySavings = parseFloat(personal._sum.amount?.toString() ?? '0');
+    }
+
     return sendSuccess(res, {
       groupId:      membership.group.id,
       groupName:    membership.group.name,
       groupCode:    membership.group.groupCode,
       role:         membership.role,
-      totalSavings: membership.group.totalSavings,
-      mySavings:    membership.memberSavings,
+      totalSavings: reliableTotalSavings,
+      mySavings:    reliableMySavings,
       memberCount:  membership.group._count.memberships,
       isActive:     membership.group.isActive,
       joinedAt:     membership.joinedAt,
-      group:        membership.group,
+      group: {
+        ...membership.group,
+        totalSavings: reliableTotalSavings,
+      },
     });
   } catch (err) { next(err); }
 }
 
-//  GET /groups/:groupId ─ basic group info (for members and non-members)
+//  GET /groups/:groupId
 
 async function getGroup(req, res, next) {
   try {
@@ -109,7 +186,7 @@ async function getGroup(req, res, next) {
   } catch (err) { next(err); }
 }
 
-//  GET /groups/:groupId/dashboard,  all info of a group for members (dashboard view)
+//  GET /groups/:groupId/dashboard
 
 async function getGroupDashboard(req, res, next) {
   try {
@@ -145,18 +222,34 @@ async function getGroupDashboard(req, res, next) {
 
     if (!group) throw new AppError('Group not found', 404);
 
+    // FIX: use reliable savings computation
+    const reliableTotalSavings = await computeReliableSavings(
+      groupId,
+      group.totalSavings
+    );
+
+    const storedMySavings = parseFloat(membership?.memberSavings?.toString() ?? '0');
+    let reliableMySavings = storedMySavings;
+    if (storedMySavings === 0 && membership) {
+      const personal = await prisma.contribution.aggregate({
+        where: { groupId, userId, status: 'CONFIRMED' },
+        _sum:  { amount: true },
+      });
+      reliableMySavings = parseFloat(personal._sum.amount?.toString() ?? '0');
+    }
+
     return sendSuccess(res, {
       group: {
-        id:          group.id,
-        name:        group.name,
-        totalSavings: group.totalSavings,
-        memberCount: group._count.memberships,
-        meetingDay:  group.meetingDay,
-        meetingTime: group.meetingTime,
-        groupCode:   group.groupCode,
-        endDate:     group.endDate,
+        id:           group.id,
+        name:         group.name,
+        totalSavings: reliableTotalSavings,
+        memberCount:  group._count.memberships,
+        meetingDay:   group.meetingDay,
+        meetingTime:  group.meetingTime,
+        groupCode:    group.groupCode,
+        endDate:      group.endDate,
       },
-      mySavings:          membership?.memberSavings ?? 0,
+      mySavings:          reliableMySavings,
       myRole:             membership?.role ?? null,
       recentTransactions,
       activeLoans,
@@ -166,7 +259,7 @@ async function getGroupDashboard(req, res, next) {
   } catch (err) { next(err); }
 }
 
-//  PATCH /groups/:groupId ─
+//  PATCH /groups/:groupId
 
 async function updateGroup(req, res, next) {
   try {
@@ -176,20 +269,20 @@ async function updateGroup(req, res, next) {
     const group = await prisma.group.update({
       where: { id: groupId },
       data: {
-        ...(name                !== undefined && { name }),
-        ...(description         !== undefined && { description }),
-        ...(location            !== undefined && { location }),
-        ...(minContribution     !== undefined && { minContribution: parseFloat(minContribution) }),
-        ...(meetingDay          !== undefined && { meetingDay }),
-        ...(meetingTime         !== undefined && { meetingTime }),
-        ...(endDate             !== undefined && { endDate: new Date(endDate) }),
+        ...(name            !== undefined && { name }),
+        ...(description     !== undefined && { description }),
+        ...(location        !== undefined && { location }),
+        ...(minContribution !== undefined && { minContribution: parseFloat(minContribution) }),
+        ...(meetingDay      !== undefined && { meetingDay }),
+        ...(meetingTime     !== undefined && { meetingTime }),
+        ...(endDate         !== undefined && { endDate: new Date(endDate) }),
       },
     });
     return sendSuccess(res, group, 'Group updated');
   } catch (err) { next(err); }
 }
 
-//  POST /groups/:groupId/members 
+//  POST /groups/:groupId/members
 
 async function addMember(req, res, next) {
   try {
@@ -201,14 +294,12 @@ async function addMember(req, res, next) {
     const normalized = normalizeMalawiPhone(phone);
     if (!normalized) throw new AppError('Invalid Malawi phone number', 400);
 
-    // Validate role
     const validRoles = ['CHAIR', 'SECRETARY', 'TREASURER', 'MEMBER'];
     const upperRole  = (role || 'MEMBER').toUpperCase();
     if (!validRoles.includes(upperRole)) {
       throw new AppError(`Role must be one of: ${validRoles.join(', ')}`, 400);
     }
 
-    // Only one CHAIR and one TREASURER per group
     if (upperRole === 'CHAIR') {
       const existingChair = await prisma.groupMembership.findFirst({ where: { groupId, role: 'CHAIR' } });
       if (existingChair) throw new AppError('Group already has a Chair', 409);
@@ -226,9 +317,7 @@ async function addMember(req, res, next) {
       throw new AppError('Group has reached maximum member capacity', 400);
     }
 
-    // Find or create user by phone
     let user = await prisma.user.findUnique({ where: { phone: normalized } });
-
     if (!user) {
       if (!firstName || !lastName) {
         throw new AppError('firstName and lastName are required when adding a new phone number', 400);
@@ -238,7 +327,6 @@ async function addMember(req, res, next) {
       });
     }
 
-    // One-group-per-user check using findFirst
     const existingMembership = await findMembershipByUserId(user.id);
     if (existingMembership) {
       throw new AppError(`This phone number (${normalized}) already belongs to a group`, 409);
@@ -248,13 +336,11 @@ async function addMember(req, res, next) {
       data: { groupId, userId: user.id, role: upperRole, status: 'ACTIVE' },
     });
 
-    // SMS invite — non-blocking
     const inviteMessage = `Hi ${user.firstName}, you have been added to "${group.name}" on TISUNGA as ${upperRole}. Download the app to get started.`;
     smsService.send(normalized, inviteMessage).catch((err) =>
       logger.warn('SMS invite failed', { phone: normalized, error: err.message })
     );
 
-    // In-app notification + push (only if they have an FCM token)
     if (user.fcmToken) {
       await createNotification({
         userId:  user.id,
@@ -262,7 +348,7 @@ async function addMember(req, res, next) {
         type:    'MEMBER_JOINED',
         title:   `Welcome to ${group.name}!`,
         body:    `You have been added as ${upperRole}. Open the app to get started.`,
-        skipSms: true, // already sent above
+        skipSms: true,
       });
     }
 
@@ -273,7 +359,7 @@ async function addMember(req, res, next) {
   } catch (err) { next(err); }
 }
 
-//  GET /groups/:groupId/members ─
+//  GET /groups/:groupId/members
 
 async function getMembers(req, res, next) {
   try {
@@ -299,20 +385,76 @@ async function getMembers(req, res, next) {
   } catch (err) { next(err); }
 }
 
-//  PATCH /groups/:groupId/members/:userId ─
+// ── GET /groups/:groupId/members/savings ───────────────────────────────────────
+//
+//  NEW ENDPOINT — returns each active member's personal savings amount.
+//
+//  The savings screen previously used the disbursement endpoint as a workaround
+//  because getMembers() doesn't include memberSavings.  This is the proper fix:
+//  we read memberSavings from GroupMembership directly and fall back to computing
+//  it from confirmed contributions when the running total is 0 (webhook issue).
+
+async function getMemberSavings(req, res, next) {
+  try {
+    const { groupId } = req.params;
+
+    const memberships = await prisma.groupMembership.findMany({
+      where:   { groupId, status: 'ACTIVE' },
+      select:  {
+        userId:       true,
+        role:         true,
+        memberSavings: true,
+        user: {
+          select: { id: true, firstName: true, lastName: true, phone: true },
+        },
+      },
+      orderBy: [{ role: 'asc' }, { memberSavings: 'desc' }],
+    });
+
+    // For each member whose stored memberSavings is 0, compute it from confirmed
+    // contributions (handles the case where the webhook hasn't fired yet).
+    const results = await Promise.all(
+      memberships.map(async (m) => {
+        const stored = parseFloat(m.memberSavings?.toString() ?? '0');
+        let savings  = stored;
+
+        if (stored === 0) {
+          const agg = await prisma.contribution.aggregate({
+            where: { groupId, userId: m.userId, status: 'CONFIRMED' },
+            _sum:  { amount: true },
+          });
+          savings = parseFloat(agg._sum.amount?.toString() ?? '0');
+        }
+
+        return {
+          userId:   m.user.id,
+          userName: `${m.user.firstName} ${m.user.lastName}`.trim(),
+          userPhone: m.user.phone,
+          role:     m.role,
+          amount:   savings,
+        };
+      })
+    );
+
+    // Sort by savings descending so top savers appear first
+    results.sort((a, b) => b.amount - a.amount);
+
+    return sendSuccess(res, results);
+  } catch (err) { next(err); }
+}
+
+//  PATCH /groups/:groupId/members/:userId
 
 async function updateMember(req, res, next) {
   try {
     const { groupId, userId } = req.params;
     const { role, status } = req.body;
 
-    // Use the compound key — correct after schema fix
     const membership = await prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
     });
     if (!membership) throw new AppError('Member not found in this group', 404);
 
-    // Cannot demote the only Chair
     if (membership.role === 'CHAIR' && role && role.toUpperCase() !== 'CHAIR') {
       throw new AppError('Cannot change role of the Chair. Transfer chairpersonship first.', 400);
     }
@@ -329,7 +471,7 @@ async function updateMember(req, res, next) {
   } catch (err) { next(err); }
 }
 
-//  DELETE /groups/:groupId/members/:userId 
+//  DELETE /groups/:groupId/members/:userId
 
 async function removeMember(req, res, next) {
   try {
@@ -352,7 +494,7 @@ async function removeMember(req, res, next) {
   } catch (err) { next(err); }
 }
 
-//  GET /groups/search/member 
+//  GET /groups/search/member
 
 async function searchMemberByPhone(req, res, next) {
   try {
@@ -391,6 +533,6 @@ async function searchMemberByPhone(req, res, next) {
 }
 
 module.exports = {
-  createGroup, getMyGroup, getGroup, getGroupDashboard, updateGroup,
-  addMember, getMembers, updateMember, removeMember, searchMemberByPhone,
+  getGroups, createGroup, getMyGroup, getGroup, getGroupDashboard, updateGroup,
+  addMember, getMembers, getMemberSavings, updateMember, removeMember, searchMemberByPhone,
 };

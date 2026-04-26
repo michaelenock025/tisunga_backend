@@ -18,7 +18,7 @@ async function createEvent(req, res, next) {
     const event = await prisma.event.create({
       data: {
         groupId, title, type,
-        eventDate:        new Date (eventDate),
+        eventDate:        new Date(eventDate),
         contributionType: contributionType || 'FLEXIBLE',
         fixedAmount:      fixedAmount ? parseFloat(fixedAmount) : undefined,
         description,
@@ -125,7 +125,7 @@ async function contributeToEvent(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── Called by webhook handler ─────────────────────────────────────────────────
+
 // Supports lookup by transactionRef (internal) OR externalRef (pawaPay depositId)
 
 async function confirmEventContribWebhook(transactionRef, status) {
@@ -196,26 +196,7 @@ async function confirmEventContribWebhook(transactionRef, status) {
   }
 }
 
-
-// ── PATCH /events/:eventId/close ─────────────────────────────────────────────
-async function closeEvent(req, res, next) {
-  try {
-    const { eventId } = req.params;
-
-    const event = await prisma.event.findUnique({ where: { id: parseInt(eventId) } });
-    if (!event) throw new AppError('Event not found', 404);
-    if (event.status === 'CLOSED') throw new AppError('Event is already closed', 400);
-
-    const updated = await prisma.event.update({
-      where: { id: parseInt(eventId) },
-      data:  { status: 'CLOSED' },
-    });
-
-    return sendSuccess(res, updated, 'Event closed');
-  } catch (err) { next(err); }
-}
-
 module.exports = {
   createEvent, getGroupEvents, getEvent,
-  contributeToEvent, confirmEventContribWebhook, closeEvent,
+  contributeToEvent, confirmEventContribWebhook,
 };

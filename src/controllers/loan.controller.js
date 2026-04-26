@@ -13,7 +13,7 @@ const { logger } = require('../utils/logger');
 
 const DEFAULT_INTEREST_RATE = 5;
 
-// ── POST /loans/apply ─────────────────────────────────────────────────────────
+//  POST /loans/apply 
 
 async function applyForLoan(req, res, next) {
   try {
@@ -77,7 +77,7 @@ async function applyForLoan(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── POST /loans/:loanId/approve ───────────────────────────────────────────────
+//  POST /loans/:loanId/approve ─
 
 async function approveLoan(req, res, next) {
   try {
@@ -159,7 +159,7 @@ async function approveLoan(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── POST /loans/:loanId/reject ────────────────────────────────────────────────
+//  POST /loans/:loanId/reject 
 
 async function rejectLoan(req, res, next) {
   try {
@@ -188,7 +188,7 @@ async function rejectLoan(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── POST /loans/:loanId/repay ─────────────────────────────────────────────────
+//  POST /loans/:loanId/repay ─
 
 async function repayLoan(req, res, next) {
   try {
@@ -242,7 +242,7 @@ async function repayLoan(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── GET /loans/mine ───────────────────────────────────────────────────────────
+//  GET /loans/mine 
 
 async function myLoans(req, res, next) {
   try {
@@ -269,7 +269,7 @@ async function myLoans(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── GET /groups/:groupId/loans ────────────────────────────────────────────────
+//  GET /groups/:groupId/loans 
 
 async function getGroupLoans(req, res, next) {
   try {
@@ -300,7 +300,7 @@ async function getGroupLoans(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── Called by webhook handler ─────────────────────────────────────────────────
+//  Called by webhook handler ─
 
 async function confirmRepaymentWebhook(transactionRef, status) {
   const repayment = await prisma.loanRepayment.findUnique({
