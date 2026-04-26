@@ -1,5 +1,5 @@
 # Dockerfile
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 COPY package*.json ./
@@ -11,9 +11,9 @@ RUN npx prisma generate
 COPY src ./src
 
 # ── Production image ──────────────────────────────────
-FROM node:20-alpine AS production
+FROM node:20-slim AS production
 
-RUN addgroup -g 1001 -S tisunga && adduser -S tisunga -u 1001
+RUN groupadd -r tisunga && useradd -r -g tisunga tisunga
 
 WORKDIR /app
 

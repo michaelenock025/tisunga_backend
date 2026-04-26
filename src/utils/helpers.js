@@ -20,7 +20,7 @@ function generateGroupCode() {
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
- 
+
 /** Validate and normalise Malawi phone number to +265XXXXXXXXX */
 function normalizeMalawiPhone(phone) {
   const cleaned = String(phone).replace(/\s+/g, '');
@@ -113,6 +113,7 @@ module.exports = {
   generateTransactionRef,
   generateGroupCode,
   generateOTP,
+  generateGroupCode,
   normalizeMalawiPhone,
   calculateLoanRepayable,
   calculateDueDate,

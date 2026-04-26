@@ -15,7 +15,7 @@ async function bootstrap() {
     startCronJobs();
     logger.info('Cron jobs started');
 
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       logger.info(`TISUNGA API running on port ${PORT} [${process.env.NODE_ENV}]`);
     });
   } catch (error) {
