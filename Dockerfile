@@ -10,7 +10,7 @@ RUN npx prisma generate
 
 COPY src ./src
 
-# ── Production image ──────────────────────────────────
+#Production image 
 FROM node:20-slim AS production
 
 RUN groupadd -r tisunga && useradd -r -g tisunga tisunga
