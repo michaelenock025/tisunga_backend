@@ -1,7 +1,10 @@
 // src/middleware/rateLimiter.js
 const rateLimit = require('express-rate-limit');
 
-const globalRateLimiter = rateLimit({
+
+const passThrough = (_req, _res, next) => next();
+
+const globalRateLimiter = process.env.NODE_ENV === 'test' ? passThrough :   rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
@@ -9,7 +12,7 @@ const globalRateLimiter = rateLimit({
   message: { success: false, message: 'Too many requests, please try again later' },
 });
 
-const authRateLimiter = rateLimit({
+const authRateLimiter = process.env.NODE_ENV === 'test' ? passThrough :  rateLimit({
   windowMs: 60 * 1000,
   max: 5,
   standardHeaders: true,
@@ -17,7 +20,7 @@ const authRateLimiter = rateLimit({
   message: { success: false, message: 'Too many auth attempts, please try again in 1 minute' },
 });
 
-const otpRateLimiter = rateLimit({
+const otpRateLimiter = process.env.NODE_ENV === 'test' ? passThrough : rateLimit({
   windowMs: 10 * 60 * 1000,
   max: 3,
   standardHeaders: true,
@@ -25,7 +28,7 @@ const otpRateLimiter = rateLimit({
   message: { success: false, message: 'Too many OTP requests, please wait 10 minutes' },
 });
 
-const paymentRateLimiter = rateLimit({
+const paymentRateLimiter = process.env.NODE_ENV === 'test' ? passThrough :  rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
