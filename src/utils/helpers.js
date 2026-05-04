@@ -3,7 +3,7 @@ const crypto = require('crypto');
  
 /** Generate TISU-prefixed transaction ref e.g. TISU29993.90 */
 function generateTransactionRef() {
-  const numeric = Math.floor(Math.random() * 99999) + 10000;
+  const numeric = Math.floor(Math.random() * 89999) + 10000; // 10000–99999, always 5 digits
   const decimal = Math.floor(Math.random() * 100);
   return `TISU${numeric}.${String(decimal).padStart(2, '0')}`;
 }
@@ -21,12 +21,15 @@ function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-/** Validate and normalise Malawi phone number to +265XXXXXXXXX */
+/** Validate and normalise Malawi phone number to +265XXXXXXXXX
+ *  Valid network prefixes: 088/089 (TNM), 099/098/077/078 (Airtel)
+ */
 function normalizeMalawiPhone(phone) {
   const cleaned = String(phone).replace(/\s+/g, '');
-  if (/^0[897]\d{8}$/.test(cleaned))      return `+265${cleaned.slice(1)}`;
-  if (/^\+265[897]\d{8}$/.test(cleaned))  return cleaned;
-  if (/^265[897]\d{8}$/.test(cleaned))    return `+${cleaned}`;
+  const PREFIX  = '(88|89|99|98|77|78)';
+  if (new RegExp(`^0${PREFIX}\\d{7}$`).test(cleaned))       return `+265${cleaned.slice(1)}`;
+  if (new RegExp(`^\\+265${PREFIX}\\d{7}$`).test(cleaned))  return cleaned;
+  if (new RegExp(`^265${PREFIX}\\d{7}$`).test(cleaned))     return `+${cleaned}`;
   return null;
 }
  
@@ -113,7 +116,6 @@ module.exports = {
   generateTransactionRef,
   generateGroupCode,
   generateOTP,
-  generateGroupCode,
   normalizeMalawiPhone,
   calculateLoanRepayable,
   calculateDueDate,
