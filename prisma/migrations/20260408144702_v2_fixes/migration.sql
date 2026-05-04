@@ -1,13 +1,6 @@
-/*
-  Warnings:
 
-  - You are about to drop the column `paymentMethod` on the `contributions` table. All the data in the column will be lost.
-  - You are about to drop the column `visibility` on the `groups` table. All the data in the column will be lost.
-  - You are about to drop the `join_requests` table. If the table is not empty, all the data it contains will be lost.
-
-*/
 -- CreateEnum
-CREATE TYPE "DisbursementStatus" AS ENUM ('PENDING', 'APPROVED', 'PROCESSING', 'COMPLETED', 'REJECTED');
+CREATE TYPE "DisbursementStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'REJECTED');
 
 -- CreateEnum
 CREATE TYPE "MeetingStatus" AS ENUM ('SCHEDULED', 'COMPLETED', 'CANCELLED');
@@ -17,13 +10,6 @@ CREATE TYPE "AttendanceStatus" AS ENUM ('PRESENT', 'ABSENT', 'EXCUSED');
 
 -- AlterEnum
 ALTER TYPE "MemberRole" ADD VALUE 'TREASURER';
-
--- AlterEnum
--- This migration adds more than one value to an enum.
--- With PostgreSQL versions 11 and earlier, this is not possible
--- in a single migration. This can be worked around by creating
--- multiple migrations, each migration adding only one value to
--- the enum.
 
 
 ALTER TYPE "NotificationType" ADD VALUE 'DISBURSEMENT_REQUESTED';
@@ -42,6 +28,9 @@ DROP INDEX "contributions_transactionRef_idx";
 
 -- DropIndex
 DROP INDEX "events_status_idx";
+
+-- DropIndex
+DROP INDEX "group_memberships_userId_idx";
 
 -- DropIndex
 DROP INDEX "groups_groupCode_idx";
@@ -130,13 +119,7 @@ CREATE UNIQUE INDEX "meeting_attendance_meetingId_userId_key" ON "meeting_attend
 CREATE INDEX "disbursements_groupId_idx" ON "disbursements"("groupId");
 
 -- CreateIndex
-CREATE INDEX "contributions_externalRef_idx" ON "contributions"("externalRef");
-
--- CreateIndex
-CREATE INDEX "event_contributions_externalRef_idx" ON "event_contributions"("externalRef");
-
--- CreateIndex
-CREATE INDEX "loan_repayments_externalRef_idx" ON "loan_repayments"("externalRef");
+CREATE UNIQUE INDEX "group_memberships_userId_key" ON "group_memberships"("userId");
 
 -- AddForeignKey
 ALTER TABLE "meetings" ADD CONSTRAINT "meetings_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "groups"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

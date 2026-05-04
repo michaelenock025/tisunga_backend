@@ -1,3 +1,6 @@
+# docker-compose.yml
+version: '3.9'
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -10,7 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - '5433:5432'
+      - '5432:5432'
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U tisunga_user -d tisunga_db']
       interval: 10s

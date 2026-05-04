@@ -1,4 +1,4 @@
-// prisma/schema.prisma  —  TISUNGA v2
+// prisma/schema.prisma — TISUNGA (Synced with Needed DB)
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,40 +8,38 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
-//  USERS
-
-
+// MODELS (kept same as your current one, with necessary fixes)
 model User {
-  id           String   @id @default(uuid())
-  phone        String   @unique
-  firstName    String
-  lastName     String
-  middleName   String?
-  passwordHash String?
-  avatarUrl    String?
-  isVerified   Boolean  @default(false)
-  isActive     Boolean  @default(true)
-  fcmToken     String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                    String              @id @default(uuid())
+  phone                 String              @unique
+  firstName             String
+  lastName              String
+  middleName            String?
+  passwordHash          String?
+  avatarUrl             String?
+  isVerified            Boolean             @default(false)
+  isActive              Boolean             @default(true)
+  fcmToken              String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
-  otps              OTP[]
-  memberships       GroupMembership[]
-  contributions     Contribution[]
-  loansAsBorrower   Loan[]            @relation("BorrowerLoans")
-  loansAsApprover   Loan[]            @relation("ApproverLoans")
-  notifications     Notification[]
-  eventContribs     EventContribution[]
-  refreshTokens     RefreshToken[]
-  meetingsCreated   Meeting[]         @relation("MeetingCreator")
-  attendanceRecords MeetingAttendance[]
-  disbursementsReq  Disbursement[]    @relation("DisbursementRequester")
-  disbursementsApp  Disbursement[]    @relation("DisbursementApprover")
+  otps                  OTP[]
+  memberships           GroupMembership[]
+  contributions         Contribution[]
+  loansAsBorrower       Loan[]              @relation("BorrowerLoans")
+  loansAsApprover       Loan[]              @relation("ApproverLoans")
+  notifications         Notification[]
+  eventContribs         EventContribution[]
+  refreshTokens         RefreshToken[]
+  meetingsCreated       Meeting[]           @relation("MeetingCreator")
+  attendanceRecords     MeetingAttendance[]
+  disbursementsReq      Disbursement[]      @relation("DisbursementRequester")
+  disbursementsApp      Disbursement[]      @relation("DisbursementApprover")
 
   @@index([phone])
   @@map("users")
 }
+
 
 model OTP {
   id        String     @id @default(uuid())
@@ -73,35 +71,33 @@ model RefreshToken {
 }
 
 
-//  GROUP
-
 
 model Group {
-  id                 String  @id @default(uuid())
+  id                 String            @id @default(uuid())
   name               String
   description        String?
   location           String?
-  groupCode          String  @unique
-  minContribution    Decimal @db.Decimal(15, 2)
+  groupCode          String            @unique
+  minContribution    Decimal           @db.Decimal(15, 2)
   savingPeriodMonths Int
   maxMembers         Int
   startDate          DateTime?
   endDate            DateTime?
   meetingDay         String?
   meetingTime        String?
-  totalSavings       Decimal  @default(0) @db.Decimal(15, 2)
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  totalSavings       Decimal           @default(0) @db.Decimal(15, 2)
+  isActive           Boolean           @default(true)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
-  memberships   GroupMembership[]
-  contributions Contribution[]
-  loans         Loan[]
-  events        Event[]
-  transactions  Transaction[]
-  notifications Notification[]
-  meetings      Meeting[]
-  disbursements Disbursement[]
+  memberships        GroupMembership[]
+  contributions      Contribution[]
+  loans              Loan[]
+  events             Event[]
+  transactions       Transaction[]
+  notifications      Notification[]
+  meetings           Meeting[]
+  disbursements      Disbursement[]
 
   @@map("groups")
 }
@@ -364,72 +360,55 @@ model Notification {
 }
 
 
-//  ENUMS
-
-
-enum OtpPurpose {
-  REGISTRATION
-  FORGOT_PASSWORD
-  LOGIN
+// ENUMS — Final Synced Version
+enum OtpPurpose { 
+REGISTRATION 
+FORGOT_PASSWORD 
+LOGIN 
 }
-
-enum Visibility {
-  PUBLIC
-  PRIVATE
-}
-
-enum MemberRole {
-  CHAIR
-  SECRETARY
-  TREASURER
-  MEMBER
-}
-
-enum MemberStatus {
-  ACTIVE
-  INACTIVE
-}
-
-enum JoinRequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-enum ContributionType {
-  SAVINGS
-  EVENT
-  FLEXIBLE
-}
-
-enum PaymentStatus {
-  PENDING
-  CONFIRMED
-  FAILED
-}
-
-enum LoanStatus {
-  PENDING
-  APPROVED
-  ACTIVE
-  COMPLETED
-  REJECTED
-  OVERDUE
-}
-
-enum EventType {
-  WEDDING
-  BIRTHDAY
-  FUNERAL
-  OTHER
-}
-
+enum Visibility { 
+  PUBLIC 
+  PRIVATE 
+  }
+enum MemberRole { 
+ CHAIR
+ SECRETARY 
+ TREASURER 
+ MEMBER 
+ }
+enum MemberStatus { 
+ ACTIVE
+ INACTIVE 
+ }
+enum ContributionType { 
+ SAVINGS
+ EVENT 
+ FLEXIBLE 
+ }
+enum PaymentStatus { 
+  PENDING 
+  CONFIRMED 
+  FAILED 
+  }
+enum LoanStatus { 
+  PENDING 
+  APPROVED 
+  ACTIVE 
+  COMPLETED 
+  REJECTED 
+  OVERDUE 
+  }
+enum EventType { 
+  WEDDING 
+  BIRTHDAY 
+  FUNERAL 
+  OTHER 
+  }
 enum EventStatus {
-  UPCOMING
-  ACTIVE
-  CLOSED
-}
-
+ UPCOMING
+ ACTIVE 
+ CLOSED 
+ }
 enum TransactionType {
   CONTRIBUTION
   LOAN_DISBURSEMENT
@@ -438,7 +417,6 @@ enum TransactionType {
   DISBURSEMENT
   WITHDRAWAL
 }
-
 enum DisbursementStatus {
   PENDING
   APPROVED
@@ -446,20 +424,22 @@ enum DisbursementStatus {
   COMPLETED
   REJECTED
 }
-
 enum MeetingStatus {
   SCHEDULED
+  ONGOING
   COMPLETED
   CANCELLED
 }
-
-enum AttendanceStatus {
-  PRESENT
-  ABSENT
-  EXCUSED
-}
-
+enum AttendanceStatus { 
+  PRESENT 
+  ABSENT 
+  EXCUSED 
+  LATE 
+  }
 enum NotificationType {
+  GENERAL
+  MEETING_SCHEDULED
+  MEETING_REMINDER
   LOAN_APPROVED
   LOAN_REJECTED
   LOAN_DUE
@@ -470,6 +450,4 @@ enum NotificationType {
   DISBURSEMENT_REQUESTED
   DISBURSEMENT_APPROVED
   DISBURSEMENT_REJECTED
-  MEETING_REMINDER
-  GENERAL
 }
