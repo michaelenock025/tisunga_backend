@@ -9,8 +9,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "node prisma/seed.js",
-    "test": "jest --runInBand",
-    "test:coverage": "jest --coverage --runInBand",
+    "test": "jest --runInBand --forceExit --detectOpenHandles --silent=false",
+    "test:coverage": "jest --coverage --runInBand --forceExit --detectOpenHandles",
     "lint": "eslint src --ext .js",
     "lint:fix": "eslint src --ext .js --fix"
   },
