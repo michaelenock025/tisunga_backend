@@ -1,6 +1,7 @@
 // prisma/schema.prisma — TISUNGA (Synced with Needed DB)
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
