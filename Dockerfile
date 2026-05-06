@@ -35,7 +35,7 @@ COPY prisma ./prisma
 # Create directories and fix permissions
 RUN mkdir -p logs uploads && \
     chown -R tisunga:tisunga /app
-
+RUN npx prisma migrate deploy && npx prisma generate
 # Switch to non-root user
 USER tisunga
 
