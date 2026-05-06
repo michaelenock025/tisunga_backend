@@ -10,8 +10,13 @@ RUN npx prisma generate
 
 COPY src ./src
 
-#Production image 
+# Production image
 FROM node:20-slim AS production
+
+# Install OpenSSL + certificates (Critical for Prisma on slim images)
+RUN apt-get update -y && \
+    apt-get install -y openssl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r tisunga && useradd -r -g tisunga tisunga
 
