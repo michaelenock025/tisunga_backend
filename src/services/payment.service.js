@@ -59,7 +59,7 @@ class PawaPayProvider {
         address: { value: msisdn },
       },
       customerTimestamp:    new Date().toISOString(),
-      statementDescription: `TISUNGA ${ref}`.slice(0, 22), // max 22 chars
+      statementDescription: `TISUNGA ${ref}`.replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 22),
     };
 
     const res = await fetch(`${this.baseUrl}/deposits`, {
@@ -106,7 +106,7 @@ class PawaPayProvider {
         address: { value: msisdn },
       },
       customerTimestamp:    new Date().toISOString(),
-      statementDescription: `TISUNGA ${ref}`.slice(0, 22),
+      statementDescription: `TISUNGA ${ref}`.replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 22),
     };
 
     const res = await fetch(`${this.baseUrl}/payouts`, {
