@@ -20,11 +20,11 @@ function getCorrespondent(phone) {
                : clean;
   const prefix = local.slice(0, 2);
 
-  if (['88', '89'].includes(prefix)) return 'TNM_MPAMBA';
-  if (['99', '98', '77', '78'].includes(prefix)) return 'AIRTEL_MALAWI';
+  if (['88', '89'].includes(prefix)) return 'TNM_MWI';
+  if (['99', '98', '77', '78'].includes(prefix)) return 'AIRTEL_MWI';
 
   logger.warn(`getCorrespondent: unknown prefix for ${phone}, defaulting to AIRTEL_MALAWI`);
-  return 'AIRTEL_MALAWI';
+  return 'AIRTEL_MWI';
 }
 
 //  pawaPay Provider 
