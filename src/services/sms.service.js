@@ -5,11 +5,16 @@ class AfricasTalkingProvider {
   constructor() {
     this.apiKey   = process.env.AT_API_KEY;
     this.username = process.env.AT_USERNAME || 'sandbox';
-    this.senderId = process.env.AT_SENDER_ID || 'TISUNGA';
+    this.senderId = process.env.AT_SENDER_ID;
   }
 
   async send(to, message) {
-    const params = new URLSearchParams({ username: this.username, to, message, from: this.senderId });
+   // const params = new URLSearchParams({ username: this.username, to, message, from: this.senderId });
+    const params = new URLSearchParams({ username: this.username, to, message });
+   
+      if (this.username !== 'sandbox' && this.senderId) {
+      params.append('from', this.senderId);
+    }
 
     const baseUrl = this.username === 'sandbox'
       ? 'https://api.sandbox.africastalking.com/version1/messaging'
