@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const { logger } = require('../utils/logger');
 const prisma = require('../config/prisma');
 const { confirmContributionWebhook } = require('./contribution.controller');
-const { confirmRepaymentWebhook }    = require('./loan.controller');
+const { confirmRepaymentWebhook } = require('./loan.controller');
 const { confirmEventContribWebhook } = require('./event.controller');
 
 // helpers 
@@ -52,7 +52,23 @@ async function findEventContribRefByExternal(externalRef) {
 
 async function handlePawaPayWebhook(req, res) {
   try {
-    const body   = req.body;
+    const signature = req.headers['x-pawapay-signature'];
+    const secret = process.env.PAWAPAY_WEBHOOK_SECRET;
+
+    if (secret && signature) {
+      const rawBody = JSON.stringify(req.body);
+      const expected = crypto
+        .createHmac('sha256', secret)
+        .update(rawBody)
+        .digest('hex');
+
+      if (signature !== expected) {
+        logger.warn('pawaPay webhook: invalid signature — request rejected');
+        return res.status(401).json({ received: false, error: 'Invalid signature' });
+      }
+    }
+
+    const body = req.body;
     const status = normaliseStatus(body?.status);
     const reason = body?.failureReason?.failureMessage || null;
 
@@ -106,8 +122,8 @@ async function handlePawaPayWebhook(req, res) {
 async function handlePaymentWebhook(req, res) {
   try {
     const signature = req.headers['x-tisunga-signature'];
-    const payload   = JSON.stringify(req.body);
-    const expected  = `sha256=${crypto
+    const payload = JSON.stringify(req.body);
+    const expected = `sha256=${crypto
       .createHmac('sha256', process.env.WEBHOOK_SECRET)
       .update(payload)
       .digest('hex')}`;
@@ -149,10 +165,10 @@ async function handleAirtelWebhook(req, res) {
     const b = req.body;
     req.body = {
       transactionRef: b?.transaction?.id || b?.id,
-      externalRef:    b?.transaction?.airtel_money_id,
-      status:         b?.transaction?.status,
-      type:           b?.transaction?.type || 'CONTRIBUTION',
-      reason:         b?.transaction?.message,
+      externalRef: b?.transaction?.airtel_money_id,
+      status: b?.transaction?.status,
+      type: b?.transaction?.type || 'CONTRIBUTION',
+      reason: b?.transaction?.message,
     };
     return handlePaymentWebhook(req, res);
   } catch (err) {
