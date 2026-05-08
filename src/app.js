@@ -35,13 +35,21 @@ app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(compression());
 app.use(morgan('combined', { stream: { write: (msg) => logger.http(msg.trim()) } }));
-app.use(globalRateLimiter);
 
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', app: 'TISUNGA API', version: '2.0.0' });
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    app: 'TISUNGA API', 
+    timestamp: new Date().toISOString() 
+  });
 });
+
+// Apply rate limiter to all other routes
+app.use((req, res, next) => {
+  if (req.path === '/health') return next();
+  globalRateLimiter(req, res, next);
+});
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use('/api/v1/auth',          authRoutes);
 app.use('/api/v1/users',         userRoutes);
