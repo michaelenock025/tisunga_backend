@@ -3,7 +3,7 @@ const { Router } = require('express');
 const { authenticate } = require('../middleware/authenticate');
 const { paymentRateLimiter } = require('../middleware/rateLimiter');
 const {
-  applyForLoan, approveLoan, rejectLoan, repayLoan, myLoans, getGroupLoans, getUserLoans,
+  applyForLoan, approveLoan, rejectLoan, repayLoan, myLoans, getGroupLoans,
 } = require('../controllers/loan.controller');
 
 const router = Router();
@@ -18,8 +18,6 @@ router.use(authenticate);
  */
 router.post('/apply',            paymentRateLimiter, applyForLoan);
 router.get('/my',                myLoans);
-router.get('/user/:userId',      getUserLoans);
-router.get('/member/:userId',    getUserLoans);
 
 router.get('/group/:groupId',    getGroupLoans);
 router.get('/my-loans',          myLoans);

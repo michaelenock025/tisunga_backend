@@ -269,48 +269,6 @@ async function myLoans(req, res, next) {
   } catch (err) { next(err); }
 }
 
-//  GET /loans/user/:userId 
-
-async function getUserLoans(req, res, next) {
-  try {
-    const { userId } = req.params;
-    const { status, page = '1', limit = '20' } = req.query;
-    const { take, skip } = paginate(parseInt(page), parseInt(limit));
-
-    const member = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { firstName: true, lastName: true },
-    });
-    if (!member) throw new AppError('Member not found', 404);
-
-    const loans = await prisma.loan.findMany({
-      where: { borrowerId: userId, ...(status ? { status: status.toUpperCase() } : {}) },
-      include: {
-        group:    { select: { name: true } },
-        approver: { select: { firstName: true, lastName: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take, skip,
-    });
-
-    const borrowerName = `${member.firstName} ${member.lastName}`;
-    const nameSuffix = borrowerName.endsWith('s') ? `${borrowerName}' Loan` : `${borrowerName}'s Loan`;
-
-    const result = loans.map((l) => ({
-      ...l,
-      percentRepaid: repaymentPercent(
-        parseFloat(l.totalRepayable.toString()),
-        parseFloat(l.remainingBalance.toString())
-      ),
-      approverName: l.approver ? `${l.approver.firstName} ${l.approver.lastName}` : null,
-      borrowerName,
-      title: nameSuffix,
-    }));
-
-    return sendSuccess(res, result);
-  } catch (err) { next(err); }
-}
-
 //  GET /groups/:groupId/loans 
 
 async function getGroupLoans(req, res, next) {
@@ -419,6 +377,6 @@ async function confirmRepaymentWebhook(transactionRef, status) {
 
 module.exports = {
   applyForLoan, approveLoan, rejectLoan,
-  repayLoan, myLoans, getUserLoans, getGroupLoans,
+  repayLoan, myLoans, getGroupLoans,
   confirmRepaymentWebhook,
 };
