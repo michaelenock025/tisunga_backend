@@ -260,6 +260,8 @@ model Meeting {
   notes       String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  imageUrl      String? 
+  images        Json?
 
   group      Group               @relation(fields: [groupId], references: [id])
   creator    User                @relation("MeetingCreator", fields: [createdBy], references: [id])
