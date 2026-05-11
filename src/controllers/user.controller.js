@@ -2,7 +2,6 @@
 const prisma = require('../config/prisma');
 const { AppError, sendSuccess } = require('../utils/AppError');
 const cloudinary = require('../config/cloudinary');
-const upload = require('../config/multer');
 
 async function getMe(req, res, next) {
   try {
@@ -51,7 +50,7 @@ async function updateAvatar(req, res, next) {
       crop: 'fill',
       quality: 'auto'
     });
-
+     fs.unlink(req.file.path, () => {});
     const avatarUrl = result.secure_url;
 
     const updated = await prisma.user.update({
@@ -64,6 +63,20 @@ async function updateAvatar(req, res, next) {
   } catch (err) {
     next(err);
   }
+}
+
+async function updateFcmToken(req, res, next) {
+  try {
+    const { fcmToken } = req.body;
+    if (!fcmToken) throw new AppError('fcmToken is required', 400);
+
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data:  { fcmToken },
+    });
+
+    return sendSuccess(res, {}, 'FCM token updated');
+  } catch (err) { next(err); }
 }
 
 module.exports = { getMe, updateMe, updateAvatar, updateFcmToken };
