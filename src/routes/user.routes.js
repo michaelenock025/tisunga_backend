@@ -1,13 +1,13 @@
 // src/routes/user.routes.js
 const { Router } = require('express');
-    
+
 const { authenticate } = require('../middleware/authenticate');
 const { getMe, updateMe, updateAvatar, updateFcmToken } = require('../controllers/user.controller');
 const { myContributions } = require('../controllers/contribution.controller');
 const { myLoans } = require('../controllers/loan.controller');
 
 const router = Router();
-const upload = require('../config/multer');
+const {uploadAvatar} = require('../config/multer');
 router.use(authenticate);
 
 router.get('/me',               getMe);
