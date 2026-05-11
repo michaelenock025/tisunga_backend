@@ -1,6 +1,8 @@
 // src/controllers/user.controller.js
 const prisma = require('../config/prisma');
 const { AppError, sendSuccess } = require('../utils/AppError');
+const cloudinary = require('../config/cloudinary');
+const upload = require('../config/multer');
 
 async function getMe(req, res, next) {
   try {
@@ -39,24 +41,29 @@ async function updateMe(req, res, next) {
 
 async function updateAvatar(req, res, next) {
   try {
-    if (!req.file) throw new AppError('No file uploaded', 400);
-    const avatarUrl = `/uploads/${req.file.filename}`;
+    if (!req.file) throw new AppError('No image file uploaded', 400);
+
+    // Upload to Cloudinary
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      folder: 'tisunga/avatars',
+      width: 400,
+      height: 400,
+      crop: 'fill',
+      quality: 'auto'
+    });
+
+    const avatarUrl = result.secure_url;
+
     const updated = await prisma.user.update({
       where: { id: req.user.id },
       data: { avatarUrl },
-      select: { id: true, avatarUrl: true },
+      select: { id: true, avatarUrl: true, firstName: true, lastName: true },
     });
-    return sendSuccess(res, updated, 'Avatar updated');
-  } catch (err) { next(err); }
-}
 
-async function updateFcmToken(req, res, next) {
-  try {
-    const { fcmToken } = req.body;
-    if (!fcmToken) throw new AppError('FCM token required', 400);
-    await prisma.user.update({ where: { id: req.user.id }, data: { fcmToken } });
-    return sendSuccess(res, {}, 'FCM token updated');
-  } catch (err) { next(err); }
+    return sendSuccess(res, updated, 'Profile picture updated successfully');
+  } catch (err) {
+    next(err);
+  }
 }
 
 module.exports = { getMe, updateMe, updateAvatar, updateFcmToken };
