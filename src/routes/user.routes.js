@@ -1,14 +1,13 @@
 // src/routes/user.routes.js
 const { Router } = require('express');
-const multer = require('multer');
+    
 const { authenticate } = require('../middleware/authenticate');
 const { getMe, updateMe, updateAvatar, updateFcmToken } = require('../controllers/user.controller');
 const { myContributions } = require('../controllers/contribution.controller');
 const { myLoans } = require('../controllers/loan.controller');
 
 const router = Router();
-const upload = multer({ dest: 'uploads/', limits: { fileSize: 5 * 1024 * 1024 } });
-
+const upload = require('../config/multer');
 router.use(authenticate);
 
 router.get('/me',               getMe);
