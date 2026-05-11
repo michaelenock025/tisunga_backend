@@ -12,7 +12,7 @@ router.use(authenticate);
 
 router.get('/me',               getMe);
 router.patch('/me',             updateMe);
-router.patch('/me/avatar',      upload.single('avatar'), updateAvatar);
+router.patch('/me/avatar',      uploadAvatar.single('avatar'), updateAvatar);
 router.patch('/me/fcm-token',   updateFcmToken);
 router.get('/me/contributions', myContributions);
 router.get('/me/loans',         myLoans);
