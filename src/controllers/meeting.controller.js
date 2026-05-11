@@ -1,5 +1,3 @@
-// src/controllers/meeting.controller.js  — TISUNGA v2
-// Meetings: Chair creates → SMS sent to all members → Chair marks attendance live.
 
 const prisma = require('../config/prisma');
 const { AppError, sendSuccess } = require('../utils/AppError');
@@ -8,8 +6,7 @@ const { smsService } = require('../services/sms.service');
 const { createNotification, notifyGroupMembers } = require('../services/notification.service');
 const { logger } = require('../utils/logger');
 
-//  POST /groups/:groupId/meetings ─
-// Chair creates a meeting. All active members are notified by SMS + push.
+
 async function createMeeting(req, res, next) {
   try {
     const { groupId } = req.params;
@@ -379,26 +376,21 @@ async function uploadMeetingImage(req, res, next) {
 
     if (!req.file) throw new AppError('No image file uploaded', 400);
 
+    // Validate meeting before committing the already-uploaded asset
     const meeting = await prisma.meeting.findUnique({ where: { id: meetingId } });
-    if (!meeting) {
-      fs.unlink(req.file.path, () => {});
-      throw new AppError('Meeting not found', 404);
-    }
-    if (meeting.groupId !== groupId) {
-      fs.unlink(req.file.path, () => {});
-      throw new AppError('Meeting does not belong to this group', 400);
-    }
+    if (!meeting) throw new AppError('Meeting not found', 404);
+    if (meeting.groupId !== groupId) throw new AppError('Meeting does not belong to this group', 400);
 
+  
     const secureUrl = req.file.path;
     const publicId  = req.file.filename;
-
 
     // Append to the images JSON array; also update imageUrl to the latest
     const existingImages = Array.isArray(meeting.images) ? meeting.images : [];
     const updatedImages = [
       ...existingImages,
       {
-        url:        secure_url,
+        url:        secureUrl,
         publicId,
         uploadedBy: req.user.id,
         uploadedAt: new Date().toISOString(),
@@ -406,14 +398,13 @@ async function uploadMeetingImage(req, res, next) {
     ];
 
     const updated = await prisma.meeting.update({
-         where:  { id: meetingId },
-         data:   { imageUrl: secureUrl, images: updatedImages },
-         select: { id: true, title: true, imageUrl: true, images: true },
-       });
+      where:  { id: meetingId },
+      data:   { imageUrl: secureUrl, images: updatedImages },
+      select: { id: true, title: true, imageUrl: true, images: true },
+    });
 
     return sendSuccess(res, updated, 'Meeting image uploaded successfully');
   } catch (err) {
-    if (req.file?.path) fs.unlink(req.file.path, () => {});
     next(err);
   }
 }

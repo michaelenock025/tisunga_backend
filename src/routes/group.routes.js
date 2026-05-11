@@ -103,7 +103,7 @@ router.post('/:groupId/disburse/reject', requireGroupRole('TREASURER'), (req, re
   rejectDisbursement(req, res, next);
 });
 
-router.post('/:groupId/meetings/:meetingId/image',requireGroupRole('CHAIR', 'SECRETARY'), upload.single('image'), uploadMeetingImage
+router.post('/:groupId/meetings/:meetingId/image',requireGroupRole('CHAIR', 'SECRETARY'), uploadMeetingImageMiddleware.single('image'), uploadMeetingImage
 );
 
 module.exports = router;
