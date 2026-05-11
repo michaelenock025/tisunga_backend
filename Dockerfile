@@ -33,7 +33,7 @@ COPY --from=builder /app/src ./src
 COPY prisma ./prisma
 
 # Create directories and fix permissions
-RUN mkdir -p logs uploads && \
+RUN mkdir -p logs && \
     chown -R tisunga:tisunga /app
 
 # Switch to non-root user

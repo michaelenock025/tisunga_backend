@@ -372,8 +372,6 @@ async function _notifyMeetingScheduled(meeting, groupName, memberships) {
   );
 }
 
-const fs = require('fs');
-const cloudinary = require('../config/cloudinary');
 
 async function uploadMeetingImage(req, res, next) {
   try {
@@ -391,33 +389,27 @@ async function uploadMeetingImage(req, res, next) {
       throw new AppError('Meeting does not belong to this group', 400);
     }
 
-    // Upload to Cloudinary under a per-meeting folder
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      folder:       `tisunga/meetings/${meetingId}`,
-      quality:      'auto',
-      fetch_format: 'auto',
-    });
+    const secureUrl = req.file.path;
+    const publicId  = req.file.filename;
 
-    // Clean up local temp file
-    fs.unlink(req.file.path, () => {});
 
     // Append to the images JSON array; also update imageUrl to the latest
     const existingImages = Array.isArray(meeting.images) ? meeting.images : [];
     const updatedImages = [
       ...existingImages,
       {
-        url:        result.secure_url,
-        publicId:   result.public_id,
+        url:        secure_url,
+        publicId,
         uploadedBy: req.user.id,
         uploadedAt: new Date().toISOString(),
       },
     ];
 
     const updated = await prisma.meeting.update({
-      where:  { id: meetingId },
-      data:   { imageUrl: result.secure_url, images: updatedImages },
-      select: { id: true, title: true, imageUrl: true, images: true },
-    });
+         where:  { id: meetingId },
+         data:   { imageUrl: secureUrl, images: updatedImages },
+         select: { id: true, title: true, imageUrl: true, images: true },
+       });
 
     return sendSuccess(res, updated, 'Meeting image uploaded successfully');
   } catch (err) {

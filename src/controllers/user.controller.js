@@ -42,16 +42,22 @@ async function updateAvatar(req, res, next) {
   try {
     if (!req.file) throw new AppError('No image file uploaded', 400);
 
-    // Upload to Cloudinary
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      folder: 'tisunga/avatars',
-      width: 400,
-      height: 400,
-      crop: 'fill',
-      quality: 'auto'
-    });
-     fs.unlink(req.file.path, () => {});
-    const avatarUrl = result.secure_url;
+    const avatarUrl = req.file.path;
+     const existing = await prisma.user.findUnique({
+          where: { id: req.user.id },
+          select: { avatarUrl: true },
+        });
+
+       if (existing?.avatarUrl) {
+            const publicId = existing.avatarUrl
+              .split('/')
+              .slice(-2) // last two segments: folder/filename
+              .join('/')
+              .replace(/\.[^/.]+$/, ''); // strip extension
+            cloudinary.uploader.destroy(publicId).catch(() => {
+
+            });
+          }
 
     const updated = await prisma.user.update({
       where: { id: req.user.id },
