@@ -15,9 +15,7 @@ function makeStorage(folder, transformation) {
     params: {
       folder: folder,
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-      transformation: [
-        { width: 400, height: 400, crop: 'fill', quality: 'auto' }
-      ],
+    
       usigned: true,
     },
   });
