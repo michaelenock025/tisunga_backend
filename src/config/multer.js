@@ -11,19 +11,14 @@ const cloudinary = require('./cloudinary');
 
 function makeStorage(folder, transformation) {
   return new CloudinaryStorage({
-    cloudinary,
-    params: async (_req, file) => {
-      if (!file.mimetype.startsWith('image/')) {
-        throw new Error('Only images are allowed');
-      }
-      return {
-        folder,
-        resource_type: 'image',
-        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-        quality: 'auto',
-        fetch_format: 'auto',
-        ...(transformation ? { transformation } : {}),
-      };
+    cloudinary: cloudinary,
+    params: {
+      folder: folder,
+      allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+      transformation: [
+        { width: 400, height: 400, crop: 'fill', quality: 'auto' }
+      ],
+      usigned: true,
     },
   });
 }
@@ -41,11 +36,13 @@ const uploadAvatar = multer({
     { width: 400, height: 400, crop: 'fill' },
   ]),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter
 });
 const uploadMeetingImage = multer({
   
   storage: makeStorage('tisunga/meetings'),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter,
 });
 
 module.exports = {uploadAvatar, uploadMeetingImage };
