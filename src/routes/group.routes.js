@@ -1,6 +1,6 @@
 
 const { Router } = require('express');
-const { uploadMeetingImage: uploadMeetingImageMiddleware } = require('../config/multer');;
+const { uploadMeetingImage: uploadMeetingImageMiddleware } = require('../config/multer');
 const { authenticate, requireGroupMember, requireGroupRole } = require('../middleware/authenticate');
 const { createGroup, getMyGroup, getGroup, getGroupDashboard, updateGroup, addMember, getMembers, getMemberSavings, updateMember, removeMember, searchMemberByPhone, } = require('../controllers/group.controller');
 const { getGroupContributions } = require('../controllers/contribution.controller');
@@ -103,7 +103,6 @@ router.post('/:groupId/disburse/reject', requireGroupRole('TREASURER'), (req, re
   rejectDisbursement(req, res, next);
 });
 
-router.post('/:groupId/meetings/:meetingId/image',requireGroupRole('CHAIR', 'SECRETARY'), upload.single('image'), uploadMeetingImage
-);
+router.post('/:groupId/meetings/:meetingId/image',requireGroupRole('CHAIR', 'SECRETARY'), uploadMeetingImageMiddleware.single('image'), uploadMeetingImage);
 
 module.exports = router;
