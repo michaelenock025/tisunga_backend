@@ -94,7 +94,12 @@ async function applyForLoan(req, res, next) {
       data:  { loanId: loan.id, groupId },
     });
 
-    return sendSuccess(res, loan, 'Loan application submitted', 201);
+    return sendSuccess(
+      res,
+      { ...loan, interestRateLabel: `${interestRate}%` },
+      'Loan application submitted',
+      201
+    );
   } catch (err) { next(err); }
 }
 
@@ -284,6 +289,7 @@ async function myLoans(req, res, next) {
         parseFloat(l.remainingBalance.toString())
       ),
       approverName: l.approver ? `${l.approver.firstName} ${l.approver.lastName}` : null,
+      interestRateLabel: `${l.interestRate}%`,
     }));
 
     return sendSuccess(res, result);
@@ -315,6 +321,7 @@ async function getGroupLoans(req, res, next) {
         parseFloat(l.remainingBalance.toString())
       ),
       borrowerName: `${l.borrower.firstName} ${l.borrower.lastName}`,
+      interestRateLabel: `${l.interestRate}%`,
     }));
 
     return sendSuccess(res, result);
