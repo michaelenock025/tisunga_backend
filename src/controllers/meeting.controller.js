@@ -1,5 +1,3 @@
-// src/controllers/meeting.controller.js  — TISUNGA v2
-// Meetings: Chair creates → SMS sent to all members → Chair marks attendance live.
 
 const prisma = require('../config/prisma');
 const { AppError, sendSuccess } = require('../utils/AppError');
@@ -8,8 +6,7 @@ const { smsService } = require('../services/sms.service');
 const { createNotification, notifyGroupMembers } = require('../services/notification.service');
 const { logger } = require('../utils/logger');
 
-// ── POST /groups/:groupId/meetings ─────────────────────
-// Chair creates a meeting. All active members are notified by SMS + push.
+
 async function createMeeting(req, res, next) {
   try {
     const { groupId } = req.params;
@@ -65,7 +62,7 @@ async function createMeeting(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── GET /groups/:groupId/meetings
+//  GET /groups/:groupId/meetings
 async function getGroupMeetings(req, res, next) {
   try {
     const { groupId } = req.params;
@@ -103,7 +100,7 @@ async function getGroupMeetings(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── GET /groups/:groupId/meetings/:meetingId ───────────
+//  GET /groups/:groupId/meetings/:meetingId ─
 async function getMeeting(req, res, next) {
   try {
     const { meetingId } = req.params;
@@ -143,7 +140,7 @@ async function getMeeting(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── PATCH /groups/:groupId/meetings/:meetingId/status ──
+//  PATCH /groups/:groupId/meetings/:meetingId/status 
 // Chair changes meeting status: SCHEDULED → ONGOING → COMPLETED | CANCELLED
 async function updateMeetingStatus(req, res, next) {
   try {
@@ -172,7 +169,7 @@ async function updateMeetingStatus(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── PATCH /groups/:groupId/meetings/:meetingId/attendance ──
+//  PATCH /groups/:groupId/meetings/:meetingId/attendance 
 // Chair marks attendance for a single member OR submits the full attendance sheet.
 // Body option A: { userId, status } — mark one member
 // Body option B: { attendance: [{ userId, status, note }] } — bulk submit
@@ -188,7 +185,7 @@ async function markAttendance(req, res, next) {
 
     const validStatuses = ['PRESENT', 'ABSENT', 'EXCUSED', 'LATE'];
 
-    // ── Bulk submission ────────────────────────────────
+    //  Bulk submission 
     if (req.body.attendance && Array.isArray(req.body.attendance)) {
       const entries = req.body.attendance;
 
@@ -231,7 +228,7 @@ async function markAttendance(req, res, next) {
       return sendSuccess(res, { updated: updates.length, presentCount }, 'Attendance submitted');
     }
 
-    // ── Single member ──────────────────────────────────
+    // Single member 
     const { userId, status, note } = req.body;
     if (!userId || !status) throw new AppError('userId and status are required', 400);
     if (!validStatuses.includes(status.toUpperCase())) {
@@ -259,7 +256,7 @@ async function markAttendance(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── GET /groups/:groupId/meetings/:meetingId/attendance ──
+//  GET /groups/:groupId/meetings/:meetingId/attendance 
 async function getMeetingAttendance(req, res, next) {
   try {
     const { meetingId } = req.params;
@@ -293,7 +290,7 @@ async function getMeetingAttendance(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── POST /groups/:groupId/meetings/:meetingId/remind ───
+//  POST /groups/:groupId/meetings/:meetingId/remind ─
 // Chair sends a manual SMS reminder to members who haven't confirmed.
 async function sendReminder(req, res, next) {
   try {
@@ -330,7 +327,7 @@ async function sendReminder(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── Private helpers 
+//  Private helpers 
 function _buildMeetingMessage(meeting, groupName, type = 'scheduled') {
   const dateStr = new Date(meeting.scheduledAt).toLocaleString('en-MW', {
     weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
@@ -372,6 +369,47 @@ async function _notifyMeetingScheduled(meeting, groupName, memberships) {
   );
 }
 
+
+async function uploadMeetingImage(req, res, next) {
+  try {
+    const { meetingId, groupId } = req.params;
+
+    if (!req.file) throw new AppError('No image file uploaded', 400);
+
+    // Validate meeting before committing the already-uploaded asset
+    const meeting = await prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) throw new AppError('Meeting not found', 404);
+    if (meeting.groupId !== groupId) throw new AppError('Meeting does not belong to this group', 400);
+
+  
+    const secureUrl = req.file.path;
+    const publicId  = req.file.filename;
+
+    // Append to the images JSON array; also update imageUrl to the latest
+    const existingImages = Array.isArray(meeting.images) ? meeting.images : [];
+    const updatedImages = [
+      ...existingImages,
+      {
+        url:        secureUrl,
+        publicId,
+        uploadedBy: req.user.id,
+        uploadedAt: new Date().toISOString(),
+      },
+    ];
+
+    const updated = await prisma.meeting.update({
+      where:  { id: meetingId },
+      data:   { imageUrl: secureUrl, images: updatedImages },
+      select: { id: true, title: true, imageUrl: true, images: true },
+    });
+
+    return sendSuccess(res, updated, 'Meeting image uploaded successfully');
+  } catch (err) {
+    next(err);
+  }
+}
+
+
 module.exports = {
   createMeeting,
   getGroupMeetings,
@@ -380,4 +418,5 @@ module.exports = {
   markAttendance,
   getMeetingAttendance,
   sendReminder,
+  uploadMeetingImage
 };

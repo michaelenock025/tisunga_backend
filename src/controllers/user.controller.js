@@ -1,6 +1,7 @@
 // src/controllers/user.controller.js
 const prisma = require('../config/prisma');
 const { AppError, sendSuccess } = require('../utils/AppError');
+const cloudinary = require('../config/cloudinary');
 
 async function getMe(req, res, next) {
   try {
@@ -39,22 +40,47 @@ async function updateMe(req, res, next) {
 
 async function updateAvatar(req, res, next) {
   try {
-    if (!req.file) throw new AppError('No file uploaded', 400);
-    const avatarUrl = `/uploads/${req.file.filename}`;
+    if (!req.file) throw new AppError('No image file uploaded', 400);
+
+    const avatarUrl = req.file.path;
+     const existing = await prisma.user.findUnique({
+          where: { id: req.user.id },
+          select: { avatarUrl: true },
+        });
+
+       if (existing?.avatarUrl) {
+            const publicId = existing.avatarUrl
+              .split('/')
+              .slice(-2) // last two segments: folder/filename
+              .join('/')
+              .replace(/\.[^/.]+$/, ''); // strip extension
+            cloudinary.uploader.destroy(publicId).catch(() => {
+
+            });
+          }
+
     const updated = await prisma.user.update({
       where: { id: req.user.id },
       data: { avatarUrl },
-      select: { id: true, avatarUrl: true },
+      select: { id: true, avatarUrl: true, firstName: true, lastName: true },
     });
-    return sendSuccess(res, updated, 'Avatar updated');
-  } catch (err) { next(err); }
+
+    return sendSuccess(res, updated, 'Profile picture updated successfully');
+  } catch (err) {
+    next(err);
+  }
 }
 
 async function updateFcmToken(req, res, next) {
   try {
     const { fcmToken } = req.body;
-    if (!fcmToken) throw new AppError('FCM token required', 400);
-    await prisma.user.update({ where: { id: req.user.id }, data: { fcmToken } });
+    if (!fcmToken) throw new AppError('fcmToken is required', 400);
+
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data:  { fcmToken },
+    });
+
     return sendSuccess(res, {}, 'FCM token updated');
   } catch (err) { next(err); }
 }
