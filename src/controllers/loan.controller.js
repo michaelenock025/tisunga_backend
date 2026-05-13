@@ -32,6 +32,32 @@ function getInterestRateByDuration(durationMonths) {
   return rate;
 }
 
+//  GET /loans/calculate ─ Loan preview calculation
+
+async function calculateLoan(req, res, next) {
+  try {
+    const { amount, durationMonths } = req.query;
+
+    if (!amount || !durationMonths) {
+      throw new AppError('amount and durationMonths are required', 400);
+    }
+
+    const principal = parseFloat(amount);
+    const months    = parseInt(durationMonths);
+
+    const interestRate     = getInterestRateByDuration(months);
+    const totalRepayable   = calculateLoanRepayable(principal, interestRate);
+    const monthlyRepayment = totalRepayable / months;
+
+    return sendSuccess(res, {
+      interestRate,
+      interestRateLabel: `${interestRate}%`,
+      totalRepayable,
+      monthlyRepayment,
+    });
+  } catch (err) { next(err); }
+}
+
 //  POST /loans/apply 
 
 async function applyForLoan(req, res, next) {
@@ -406,5 +432,6 @@ async function confirmRepaymentWebhook(transactionRef, status) {
 module.exports = {
   applyForLoan, approveLoan, rejectLoan,
   repayLoan, myLoans, getGroupLoans,
+  calculateLoan,
   confirmRepaymentWebhook,
 };

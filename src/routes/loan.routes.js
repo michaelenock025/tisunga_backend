@@ -4,10 +4,33 @@ const { authenticate } = require('../middleware/authenticate');
 const { paymentRateLimiter } = require('../middleware/rateLimiter');
 const {
   applyForLoan, approveLoan, rejectLoan, repayLoan, myLoans, getGroupLoans,
+  calculateLoan,
 } = require('../controllers/loan.controller');
 
 const router = Router();
 router.use(authenticate);
+
+/**
+ * @swagger
+ * /loans/calculate:
+ *   get:
+ *     summary: Calculate loan preview (interest, total repayable, monthly repayment)
+ *     tags: [Loans]
+ *     parameters:
+ *       - in: query
+ *         name: amount
+ *         required: true
+ *         schema:
+ *           type: number
+ *         description: Principal loan amount
+ *       - in: query
+ *         name: durationMonths
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Loan duration in months (1-4)
+ */
+router.get('/calculate', calculateLoan);
 
 /**
  * @swagger
