@@ -11,7 +11,52 @@ const { createNotification, notifyGroupMembers } = require('../services/notifica
 const { smsService } = require('../services/sms.service');
 const { logger } = require('../utils/logger');
 
-const DEFAULT_INTEREST_RATE = 5;
+// Interest rates based on loan duration (in months)
+const INTEREST_RATES_BY_DURATION = {
+  1: 15,
+  2: 25,
+  3: 35,
+  4: 45,
+};
+
+/**
+ * Calculate interest rate based on loan duration
+ * @param {number} durationMonths - Loan duration in months
+ * @returns {number} Interest rate percentage
+ */
+function getInterestRateByDuration(durationMonths) {
+  const rate = INTEREST_RATES_BY_DURATION[durationMonths];
+  if (!rate) {
+    throw new Error(`Interest rate not defined for duration: ${durationMonths} months`);
+  }
+  return rate;
+}
+
+//  GET /loans/calculate ─ Loan preview calculation
+
+async function calculateLoan(req, res, next) {
+  try {
+    const { amount, durationMonths } = req.query;
+
+    if (!amount || !durationMonths) {
+      throw new AppError('amount and durationMonths are required', 400);
+    }
+
+    const principal = parseFloat(amount);
+    const months    = parseInt(durationMonths);
+
+    const interestRate     = getInterestRateByDuration(months);
+    const totalRepayable   = calculateLoanRepayable(principal, interestRate);
+    const monthlyRepayment = totalRepayable / months;
+
+    return sendSuccess(res, {
+      interestRate,
+      interestRateLabel: `${interestRate}%`,
+      totalRepayable,
+      monthlyRepayment,
+    });
+  } catch (err) { next(err); }
+}
 
 //  POST /loans/apply 
 
@@ -47,14 +92,16 @@ async function applyForLoan(req, res, next) {
       throw new AppError('Insufficient group savings for this loan amount', 400);
     }
 
-    const totalRepayable = calculateLoanRepayable(principal, DEFAULT_INTEREST_RATE);
+    // Calculate interest rate based on duration
+    const interestRate = getInterestRateByDuration(months);
+    const totalRepayable = calculateLoanRepayable(principal, interestRate);
 
     const loan = await prisma.loan.create({
       data: {
         transactionRef:  generateTransactionRef(),
         borrowerId, groupId,
         principalAmount: principal,
-        interestRate:    DEFAULT_INTEREST_RATE,
+        interestRate,
         totalRepayable,
         remainingBalance: totalRepayable,
         durationMonths:   months,
@@ -73,7 +120,12 @@ async function applyForLoan(req, res, next) {
       data:  { loanId: loan.id, groupId },
     });
 
-    return sendSuccess(res, loan, 'Loan application submitted', 201);
+    return sendSuccess(
+      res,
+      { ...loan, interestRateLabel: `${interestRate}%` },
+      'Loan application submitted',
+      201
+    );
   } catch (err) { next(err); }
 }
 
@@ -263,6 +315,7 @@ async function myLoans(req, res, next) {
         parseFloat(l.remainingBalance.toString())
       ),
       approverName: l.approver ? `${l.approver.firstName} ${l.approver.lastName}` : null,
+      interestRateLabel: `${l.interestRate}%`,
     }));
 
     return sendSuccess(res, result);
@@ -294,6 +347,7 @@ async function getGroupLoans(req, res, next) {
         parseFloat(l.remainingBalance.toString())
       ),
       borrowerName: `${l.borrower.firstName} ${l.borrower.lastName}`,
+      interestRateLabel: `${l.interestRate}%`,
     }));
 
     return sendSuccess(res, result);
@@ -378,5 +432,6 @@ async function confirmRepaymentWebhook(transactionRef, status) {
 module.exports = {
   applyForLoan, approveLoan, rejectLoan,
   repayLoan, myLoans, getGroupLoans,
+  calculateLoan,
   confirmRepaymentWebhook,
 };
