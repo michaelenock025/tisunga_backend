@@ -43,10 +43,10 @@ async function calculateLoan(req, res, next) {
     }
 
     const principal = parseFloat(amount);
-    const months    = parseInt(durationMonths);
+    const months = parseInt(durationMonths);
 
-    const interestRate     = getInterestRateByDuration(months);
-    const totalRepayable   = calculateLoanRepayable(principal, interestRate);
+    const interestRate = getInterestRateByDuration(months);
+    const totalRepayable = calculateLoanRepayable(principal, interestRate);
     const monthlyRepayment = totalRepayable / months;
 
     return sendSuccess(res, {
@@ -70,10 +70,10 @@ async function applyForLoan(req, res, next) {
     }
 
     const principal = parseFloat(amount);
-    const months    = parseInt(durationMonths);
+    const months = parseInt(durationMonths);
 
     const membership = await prisma.groupMembership.findUnique({
-      where:   { groupId_userId: { groupId, userId: borrowerId } },
+      where: { groupId_userId: { groupId, userId: borrowerId } },
       include: { group: true },
     });
     if (!membership || membership.status !== 'ACTIVE') {
@@ -86,27 +86,27 @@ async function applyForLoan(req, res, next) {
     if (activeLoan) {
       throw new AppError('You already have an active or pending loan in this group', 409);
     }
-
-    const groupBalance = parseFloat(membership.group.totalSavings.toString());
-    if (principal > groupBalance) {
-      throw new AppError('Insufficient group savings for this loan amount', 400);
-    }
-
+    /*
+        const groupBalance = parseFloat(membership.group.totalSavings.toString());
+        if (principal > groupBalance) {
+          throw new AppError('Insufficient group savings for this loan amount', 400);
+        }
+    */
     // Calculate interest rate based on duration
     const interestRate = getInterestRateByDuration(months);
     const totalRepayable = calculateLoanRepayable(principal, interestRate);
 
     const loan = await prisma.loan.create({
       data: {
-        transactionRef:  generateTransactionRef(),
+        transactionRef: generateTransactionRef(),
         borrowerId, groupId,
         principalAmount: principal,
         interestRate,
         totalRepayable,
         remainingBalance: totalRepayable,
-        durationMonths:   months,
-        purpose:          purpose || null,
-        status:           'PENDING',
+        durationMonths: months,
+        purpose: purpose || null,
+        status: 'PENDING',
       },
     });
 
@@ -114,10 +114,10 @@ async function applyForLoan(req, res, next) {
     await notifyGroupMembers({
       groupId,
       excludeUserId: borrowerId,
-      type:  'GENERAL',
+      type: 'GENERAL',
       title: 'New Loan Application',
-      body:  `A member has applied for a loan of MWK ${principal.toLocaleString()}.`,
-      data:  { loanId: loan.id, groupId },
+      body: `A member has applied for a loan of MWK ${principal.toLocaleString()}.`,
+      data: { loanId: loan.id, groupId },
     });
 
     return sendSuccess(
@@ -137,13 +137,13 @@ async function approveLoan(req, res, next) {
     const approverId = req.user.id;
 
     const loan = await prisma.loan.findUnique({
-      where:   { id: loanId },
+      where: { id: loanId },
       include: {
-        group:    true,
+        group: true,
         borrower: { select: { phone: true, firstName: true, lastName: true } },
       },
     });
-    if (!loan)                     throw new AppError('Loan not found', 404);
+    if (!loan) throw new AppError('Loan not found', 404);
     if (loan.status !== 'PENDING') throw new AppError('Loan is not pending approval', 400);
 
     const membership = await prisma.groupMembership.findUnique({
@@ -154,18 +154,25 @@ async function approveLoan(req, res, next) {
     }
 
     const principal = parseFloat(loan.principalAmount.toString());
-    const dueDate   = calculateDueDate(new Date(), loan.durationMonths);
+    const dueDate = calculateDueDate(new Date(), loan.durationMonths);
     const transactionRef = generateTransactionRef();
 
     // Update loan status + deduct from group balance atomically
     await prisma.$transaction(async (tx) => {
       await tx.loan.update({
         where: { id: loanId },
-        data:  { status: 'ACTIVE', approverId, approvedAt: new Date(), disbursedAt: new Date(), dueDate },
+        data: {
+          status: 'ACTIVE',
+          approverId,
+          approvedAt: new Date(),
+          disbursedAt: new Date(),
+          dueDate,
+        },
       });
+
       await tx.group.update({
         where: { id: loan.groupId },
-        data:  { totalSavings: { decrement: principal } },
+        data: { totalBorrowed: { increment: principal } },
       });
     });
 
@@ -178,29 +185,29 @@ async function approveLoan(req, res, next) {
       // Roll back the balance change since disbursement didn't go through
       await prisma.$transaction(async (tx) => {
         await tx.loan.update({ where: { id: loanId }, data: { status: 'APPROVED' } });
-        await tx.group.update({ where: { id: loan.groupId }, data: { totalSavings: { increment: principal } } });
+        await tx.group.update({ where: { id: loan.groupId }, data: { totalBorrowed: { increment: principal } } });
       });
       throw new AppError('Disbursement failed. Loan reverted to APPROVED. Please retry.', 502);
     }
 
     // Ledger entry
     await recordTransaction({
-      groupId:     loan.groupId,
-      userId:      loan.borrowerId,
-      type:        'LOAN_DISBURSEMENT',
-      amount:      principal,
+      groupId: loan.groupId,
+      userId: loan.borrowerId,
+      type: 'LOAN_DISBURSEMENT',
+      amount: principal,
       description: `Loan disbursed to ${loan.borrower.firstName} ${loan.borrower.lastName}`,
-      relatedId:   loan.id,
+      relatedId: loan.id,
     });
 
     // In-app notification + push + SMS
     await createNotification({
-      userId:  loan.borrowerId,
+      userId: loan.borrowerId,
       groupId: loan.groupId,
-      type:    'LOAN_APPROVED',
-      title:   'Loan Approved & Disbursed!',
-      body:    `Your loan of MWK ${principal.toLocaleString()} has been approved and is being sent to your phone. Due: ${dueDate.toDateString()}.`,
-      data:    { loanId: loan.id },
+      type: 'LOAN_APPROVED',
+      title: 'Loan Approved & Disbursed!',
+      body: `Your loan of MWK ${principal.toLocaleString()} has been approved and is being sent to your phone. Due: ${dueDate.toDateString()}.`,
+      data: { loanId: loan.id },
     });
 
     return sendSuccess(
@@ -219,21 +226,21 @@ async function rejectLoan(req, res, next) {
     const { reason } = req.body;
 
     const loan = await prisma.loan.findUnique({ where: { id: loanId } });
-    if (!loan)                     throw new AppError('Loan not found', 404);
+    if (!loan) throw new AppError('Loan not found', 404);
     if (loan.status !== 'PENDING') throw new AppError('Loan is not pending', 400);
 
     await prisma.loan.update({
       where: { id: loanId },
-      data:  { status: 'REJECTED', rejectedReason: reason, approverId: req.user.id },
+      data: { status: 'REJECTED', rejectedReason: reason, approverId: req.user.id },
     });
 
     await createNotification({
-      userId:  loan.borrowerId,
+      userId: loan.borrowerId,
       groupId: loan.groupId,
-      type:    'LOAN_REJECTED',
-      title:   'Loan Application Rejected',
-      body:    reason || 'Your loan application was not approved by the group.',
-      data:    { loanId },
+      type: 'LOAN_REJECTED',
+      title: 'Loan Application Rejected',
+      body: reason || 'Your loan application was not approved by the group.',
+      data: { loanId },
     });
 
     return sendSuccess(res, {}, 'Loan rejected');
@@ -244,28 +251,28 @@ async function rejectLoan(req, res, next) {
 
 async function repayLoan(req, res, next) {
   try {
-    const { loanId }      = req.params;
+    const { loanId } = req.params;
     const { amount, phone } = req.body;
     const userId = req.user.id;
 
     if (!amount || !phone) throw new AppError('amount and phone are required', 400);
 
     const loan = await prisma.loan.findUnique({
-      where:   { id: loanId },
+      where: { id: loanId },
       include: { group: true },
     });
-    if (!loan)                      throw new AppError('Loan not found', 404);
-    if (loan.borrowerId !== userId)  throw new AppError('This is not your loan', 403);
-    if (loan.status !== 'ACTIVE')   throw new AppError('Loan is not active', 400);
+    if (!loan) throw new AppError('Loan not found', 404);
+    if (loan.borrowerId !== userId) throw new AppError('This is not your loan', 403);
+    if (loan.status !== 'ACTIVE') throw new AppError('Loan is not active', 400);
 
     const repayAmount = parseFloat(amount);
-    const remaining   = parseFloat(loan.remainingBalance.toString());
+    const remaining = parseFloat(loan.remainingBalance.toString());
     if (repayAmount > remaining) {
       throw new AppError(`Amount exceeds remaining balance of MWK ${remaining.toLocaleString()}`, 400);
     }
 
     const transactionRef = generateTransactionRef();
-    const normalized     = phone.startsWith('+') ? phone : `+265${phone.replace(/^0/, '')}`;
+    const normalized = phone.startsWith('+') ? phone : `+265${phone.replace(/^0/, '')}`;
 
     const repayment = await prisma.loanRepayment.create({
       data: { loanId, transactionRef, amount: repayAmount, status: 'PENDING' },
@@ -276,7 +283,7 @@ async function repayLoan(req, res, next) {
     await prisma.loanRepayment.update({
       where: { id: repayment.id },
       data: {
-        status:      payResult.status === 'FAILED' ? 'FAILED' : 'PENDING',
+        status: payResult.status === 'FAILED' ? 'FAILED' : 'PENDING',
         externalRef: payResult.externalRef,
       },
     });
@@ -299,10 +306,10 @@ async function repayLoan(req, res, next) {
 async function myLoans(req, res, next) {
   try {
     const loans = await prisma.loan.findMany({
-      where:   { borrowerId: req.user.id },
+      where: { borrowerId: req.user.id },
       include: {
-        group:      { select: { name: true } },
-        approver:   { select: { firstName: true, lastName: true } },
+        group: { select: { name: true } },
+        approver: { select: { firstName: true, lastName: true } },
         repayments: { where: { status: 'CONFIRMED' } },
       },
       orderBy: { createdAt: 'desc' },
@@ -331,7 +338,7 @@ async function getGroupLoans(req, res, next) {
     const { take, skip } = paginate(parseInt(page), parseInt(limit));
 
     const loans = await prisma.loan.findMany({
-      where:   { groupId, ...(status ? { status: status.toUpperCase() } : {}) },
+      where: { groupId, ...(status ? { status: status.toUpperCase() } : {}) },
       include: {
         borrower: { select: { firstName: true, lastName: true, phone: true } },
         approver: { select: { firstName: true, lastName: true } },
@@ -358,11 +365,11 @@ async function getGroupLoans(req, res, next) {
 
 async function confirmRepaymentWebhook(transactionRef, status) {
   const repayment = await prisma.loanRepayment.findUnique({
-    where:   { transactionRef },
+    where: { transactionRef },
     include: {
       loan: {
         include: {
-          group:    true,
+          group: true,
           borrower: { select: { firstName: true, lastName: true, phone: true } },
         },
       },
@@ -376,34 +383,54 @@ async function confirmRepaymentWebhook(transactionRef, status) {
 
     if (status === 'CONFIRMED') {
       const repayAmount = parseFloat(repayment.amount.toString());
-      const newBalance  = parseFloat(repayment.loan.remainingBalance.toString()) - repayAmount;
+      const newBalance = parseFloat(repayment.loan.remainingBalance.toString()) - repayAmount;
       const isCompleted = newBalance <= 0;
+
+      //Split repayment into principal and interest portions for accurate ledger entries
+      const principalPortion = Math.min(repayAmount, parseFloat(repayment.loan.principalAmount.toString()));
+      const interestPortion = repayAmount - principalPortion;
 
       await tx.loan.update({
         where: { id: repayment.loanId },
-        data:  { remainingBalance: Math.max(0, newBalance), status: isCompleted ? 'COMPLETED' : 'ACTIVE' },
+        data: { remainingBalance: Math.max(0, newBalance), status: isCompleted ? 'COMPLETED' : 'ACTIVE' },
       });
+
       // Repayment returns money to the group pool
       await tx.group.update({
         where: { id: repayment.loan.groupId },
-        data:  { totalSavings: { increment: repayAmount } },
+        data: { totalBorrowed: { decrement: principalPortion } },
       });
+ 
+      // Give interest to borrower as savings
+      if (interestPortion > 0) {
+        await tx.groupMembership.update({
+          where: { groupId_userId: { groupId: repayment.loan.groupId, userId: repayment.loan.borrowerId } },
+          data: { memberSavings: { increment: interestPortion } },
+        });
+
+        await tx.group.update({
+          where: { id: repayment.loan.groupId },
+          data: { totalSavings: { increment: interestPortion } },
+        });
+      }
+      
+
     }
   });
 
   if (status === 'CONFIRMED') {
-    const repayAmount  = parseFloat(repayment.amount.toString());
-    const remaining    = parseFloat(repayment.loan.remainingBalance.toString()) - repayAmount;
-    const isCompleted  = remaining <= 0;
+    const repayAmount = parseFloat(repayment.amount.toString());
+    const remaining = parseFloat(repayment.loan.remainingBalance.toString()) - repayAmount;
+    const isCompleted = remaining <= 0;
     const borrowerName = `${repayment.loan.borrower.firstName} ${repayment.loan.borrower.lastName}`;
 
     await recordTransaction({
-      groupId:     repayment.loan.groupId,
-      userId:      repayment.loan.borrowerId,
-      type:        'LOAN_REPAYMENT',
-      amount:      repayAmount,
+      groupId: repayment.loan.groupId,
+      userId: repayment.loan.borrowerId,
+      type: 'LOAN_REPAYMENT',
+      amount: repayAmount,
       description: `Loan repayment from ${borrowerName}`,
-      relatedId:   repayment.loanId,
+      relatedId: repayment.loanId,
     });
 
     // Notification + SMS to borrower
@@ -412,12 +439,12 @@ async function confirmRepaymentWebhook(transactionRef, status) {
       : `TISUNGA: Repayment of MWK ${repayAmount.toLocaleString()} received. Remaining: MWK ${Math.max(0, remaining).toLocaleString()}.`;
 
     await createNotification({
-      userId:  repayment.loan.borrowerId,
+      userId: repayment.loan.borrowerId,
       groupId: repayment.loan.groupId,
-      type:    'GENERAL',
-      title:   isCompleted ? 'Loan Fully Repaid!' : 'Repayment Received',
-      body:    message,
-      data:    { loanId: repayment.loanId },
+      type: 'GENERAL',
+      title: isCompleted ? 'Loan Fully Repaid!' : 'Repayment Received',
+      body: message,
+      data: { loanId: repayment.loanId },
     });
   }
 
