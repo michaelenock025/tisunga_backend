@@ -87,6 +87,7 @@ model Group {
   meetingDay         String?
   meetingTime        String?
   totalSavings       Decimal           @default(0) @db.Decimal(15, 2)
+  totalBorrowed      Decimal           @default(0) @db.Decimal(15, 2)
   isActive           Boolean           @default(true)
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt

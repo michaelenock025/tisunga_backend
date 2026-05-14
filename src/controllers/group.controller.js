@@ -6,6 +6,10 @@ const { createNotification } = require('../services/notification.service');
 const { smsService } = require('../services/sms.service');
 const { logger } = require('../utils/logger');
 
+const LEADERSHIP_ROLES = ['CHAIR', 'SECRETARY', 'TREASURER'];
+
+
+
 //  Helper: find a user's active membership
 async function findMembershipByUserId(userId) {
   return prisma.groupMembership.findFirst({
@@ -13,21 +17,8 @@ async function findMembershipByUserId(userId) {
   });
 }
 
+
 // ── Helper: compute reliable totalSavings from confirmed contributions ─────────
-//
-// WHY THIS EXISTS:
-//   group.totalSavings is a running total that is incremented/decremented by
-//   the pawaPay webhook.  In local / test environments the webhook URL is
-//   typically unreachable, so contributions stay PENDING and totalSavings stays
-//   0 even though members have genuinely saved.
-//
-//   This helper computes the real figure directly from the contributions table:
-//     realTotal = SUM(confirmed contributions) - SUM(principal of active loans)
-//
-//   We return whichever is larger: the stored running total (correct in prod)
-//   or the computed total (correct when webhook hasn't fired).
-//   This is safe because both values should converge to the same number in
-//   production once the webhook is working.
 
 async function computeReliableSavings(groupId, storedTotalSavings) {
   const stored = parseFloat(storedTotalSavings?.toString() ?? '0');
@@ -39,21 +30,31 @@ async function computeReliableSavings(groupId, storedTotalSavings) {
   const [contribResult, loanResult] = await Promise.all([
     prisma.contribution.aggregate({
       where: { groupId, status: 'CONFIRMED' },
-      _sum:  { amount: true },
+      _sum: { amount: true },
     }),
     prisma.loan.aggregate({
       where: { groupId, status: { in: ['ACTIVE'] } },
-      _sum:  { principalAmount: true },
+      _sum: { principalAmount: true },
     }),
   ]);
 
   const totalContributed = parseFloat(contribResult._sum.amount?.toString() ?? '0');
-  const totalLoaned      = parseFloat(loanResult._sum.principalAmount?.toString() ?? '0');
-  const computed         = Math.max(0, totalContributed - totalLoaned);
+  const totalLoaned = parseFloat(loanResult._sum.principalAmount?.toString() ?? '0');
+  const computed = Math.max(0, totalContributed - totalLoaned);
 
   return Math.max(stored, computed);
 }
 
+async function getGroupWithBalances(groupId) {
+  const group = await prisma.group.findUnique({ where: { id: groupId } });
+  if (!group) return null;
+
+  const totalSavings = parseFloat(group.totalSavings.toString());
+  const totalBorrowed = parseFloat(group.totalBorrowed?.toString() ?? '0');
+  const availableBalance = Math.max(0, totalSavings - totalBorrowed);
+
+  return { ...group, totalBorrowed, availableBalance };
+}
 //  GET /groups — discover public/open groups
 
 async function getGroups(req, res, next) {
@@ -107,11 +108,11 @@ async function createGroup(req, res, next) {
       const g = await tx.group.create({
         data: {
           name, description, location, groupCode,
-          minContribution:    parseFloat(minContribution),
+          minContribution: parseFloat(minContribution),
           savingPeriodMonths: parseInt(savingPeriodMonths),
-          maxMembers:         parseInt(maxMembers),
-          startDate:  startDate ? new Date(startDate) : undefined,
-          endDate:    endDate   ? new Date(endDate)   : undefined,
+          maxMembers: parseInt(maxMembers),
+          startDate: startDate ? new Date(startDate) : undefined,
+          endDate: endDate ? new Date(endDate) : undefined,
           meetingDay, meetingTime,
         },
       });
@@ -130,7 +131,7 @@ async function createGroup(req, res, next) {
 async function getMyGroup(req, res, next) {
   try {
     const membership = await prisma.groupMembership.findFirst({
-      where:   { userId: req.user.id, status: 'ACTIVE' },
+      where: { userId: req.user.id, status: 'ACTIVE' },
       include: {
         group: { include: { _count: { select: { memberships: true } } } },
       },
@@ -154,26 +155,34 @@ async function getMyGroup(req, res, next) {
     if (storedMySavings === 0) {
       const personal = await prisma.contribution.aggregate({
         where: { groupId: membership.group.id, userId: req.user.id, status: 'CONFIRMED' },
-        _sum:  { amount: true },
+        _sum: { amount: true },
       });
       reliableMySavings = parseFloat(personal._sum.amount?.toString() ?? '0');
     }
+    const groupData = await getGroupWithBalances(membership.group.id);
 
-    return sendSuccess(res, {
-      groupId:      membership.group.id,
-      groupName:    membership.group.name,
-      groupCode:    membership.group.groupCode,
-      role:         membership.role,
+    const isLeader = LEADERSHIP_ROLES.includes(membership.role);
+    const payload = {
+      groupId: membership.group.id,
+      groupName: membership.group.name,
+      groupCode: membership.group.groupCode,
+      role: membership.role,
       totalSavings: reliableTotalSavings,
-      mySavings:    reliableMySavings,
-      memberCount:  membership.group._count.memberships,
-      isActive:     membership.group.isActive,
-      joinedAt:     membership.joinedAt,
+      mySavings: reliableMySavings,
+      memberCount: membership.group._count.memberships,
+      isActive: membership.group.isActive,
+      joinedAt: membership.joinedAt,
       group: {
         ...membership.group,
         totalSavings: reliableTotalSavings,
       },
-    });
+    };
+
+    if (isLeader) {
+      payload.totalBorrowed = groupData.totalBorrowed;
+      payload.availableBalance = groupData.availableBalance;
+    }
+    return sendSuccess(res, payload);
   } catch (err) { next(err); }
 }
 
@@ -182,7 +191,7 @@ async function getMyGroup(req, res, next) {
 async function getGroup(req, res, next) {
   try {
     const group = await prisma.group.findUnique({
-      where:   { id: req.params.groupId },
+      where: { id: req.params.groupId },
       include: { _count: { select: { memberships: true } } },
     });
     if (!group) throw new AppError('Group not found', 404);
@@ -200,27 +209,27 @@ async function getGroupDashboard(req, res, next) {
     const [group, membership, recentTransactions, activeLoans, upcomingMeetings, upcomingEvents] =
       await Promise.all([
         prisma.group.findUnique({
-          where:   { id: groupId },
+          where: { id: groupId },
           include: { _count: { select: { memberships: true } } },
         }),
         prisma.groupMembership.findUnique({
           where: { groupId_userId: { groupId, userId } },
         }),
         prisma.transaction.findMany({
-          where:   { groupId },
+          where: { groupId },
           orderBy: { createdAt: 'desc' },
-          take:    5,
+          take: 5,
         }),
         prisma.loan.count({ where: { groupId, status: 'ACTIVE' } }),
         prisma.meeting.findMany({
-          where:   { groupId, status: 'SCHEDULED', scheduledAt: { gte: new Date() } },
+          where: { groupId, status: 'SCHEDULED', scheduledAt: { gte: new Date() } },
           orderBy: { scheduledAt: 'asc' },
-          take:    2,
+          take: 2,
         }),
         prisma.event.findMany({
-          where:   { groupId, status: { in: ['ACTIVE', 'UPCOMING'] } },
+          where: { groupId, status: { in: ['ACTIVE', 'UPCOMING'] } },
           orderBy: { eventDate: 'asc' },
-          take:    3,
+          take: 3,
         }),
       ]);
 
@@ -237,29 +246,33 @@ async function getGroupDashboard(req, res, next) {
     if (storedMySavings === 0 && membership) {
       const personal = await prisma.contribution.aggregate({
         where: { groupId, userId, status: 'CONFIRMED' },
-        _sum:  { amount: true },
+        _sum: { amount: true },
       });
       reliableMySavings = parseFloat(personal._sum.amount?.toString() ?? '0');
     }
 
-    return sendSuccess(res, {
+    const groupData = await getGroupWithBalances(groupId);
+
+    const isLeader = LEADERSHIP_ROLES.includes(membership.role);
+    const payload = {
       group: {
-        id:           group.id,
-        name:         group.name,
+        ...group,
         totalSavings: reliableTotalSavings,
-        memberCount:  group._count.memberships,
-        meetingDay:   group.meetingDay,
-        meetingTime:  group.meetingTime,
-        groupCode:    group.groupCode,
-        endDate:      group.endDate,
       },
-      mySavings:          reliableMySavings,
-      myRole:             membership?.role ?? null,
+      totalSavings: reliableTotalSavings,
+      mySavings: reliableMySavings,
+      myRole: membership.role,
+      memberCount: group._count.memberships,
       recentTransactions,
       activeLoans,
       upcomingMeetings,
       upcomingEvents,
-    });
+    };
+    if (isLeader) {
+      payload.totalBorrowed = groupData.totalBorrowed;
+      payload.availableBalance = groupData.availableBalance;
+    }
+    return sendSuccess(res, payload);
   } catch (err) { next(err); }
 }
 
@@ -273,13 +286,13 @@ async function updateGroup(req, res, next) {
     const group = await prisma.group.update({
       where: { id: groupId },
       data: {
-        ...(name            !== undefined && { name }),
-        ...(description     !== undefined && { description }),
-        ...(location        !== undefined && { location }),
+        ...(name !== undefined && { name }),
+        ...(description !== undefined && { description }),
+        ...(location !== undefined && { location }),
         ...(minContribution !== undefined && { minContribution: parseFloat(minContribution) }),
-        ...(meetingDay      !== undefined && { meetingDay }),
-        ...(meetingTime     !== undefined && { meetingTime }),
-        ...(endDate         !== undefined && { endDate: new Date(endDate) }),
+        ...(meetingDay !== undefined && { meetingDay }),
+        ...(meetingTime !== undefined && { meetingTime }),
+        ...(endDate !== undefined && { endDate: new Date(endDate) }),
       },
     });
     return sendSuccess(res, group, 'Group updated');
@@ -299,7 +312,7 @@ async function addMember(req, res, next) {
     if (!normalized) throw new AppError('Invalid Malawi phone number', 400);
 
     const validRoles = ['CHAIR', 'SECRETARY', 'TREASURER', 'MEMBER'];
-    const upperRole  = (role || 'MEMBER').toUpperCase();
+    const upperRole = (role || 'MEMBER').toUpperCase();
     if (!validRoles.includes(upperRole)) {
       throw new AppError(`Role must be one of: ${validRoles.join(', ')}`, 400);
     }
@@ -347,11 +360,11 @@ async function addMember(req, res, next) {
 
     if (user.fcmToken) {
       await createNotification({
-        userId:  user.id,
+        userId: user.id,
         groupId,
-        type:    'MEMBER_JOINED',
-        title:   `Welcome to ${group.name}!`,
-        body:    `You have been added as ${upperRole}. Open the app to get started.`,
+        type: 'MEMBER_JOINED',
+        title: `Welcome to ${group.name}!`,
+        body: `You have been added as ${upperRole}. Open the app to get started.`,
         skipSms: true,
       });
     }
@@ -372,7 +385,7 @@ async function getMembers(req, res, next) {
     const { take, skip } = paginate(parseInt(page), parseInt(limit));
 
     const memberships = await prisma.groupMembership.findMany({
-      where:   { groupId },
+      where: { groupId },
       include: {
         user: {
           select: {
@@ -403,10 +416,10 @@ async function getMemberSavings(req, res, next) {
     const { groupId } = req.params;
 
     const memberships = await prisma.groupMembership.findMany({
-      where:   { groupId, status: 'ACTIVE' },
-      select:  {
-        userId:       true,
-        role:         true,
+      where: { groupId, status: 'ACTIVE' },
+      select: {
+        userId: true,
+        role: true,
         memberSavings: true,
         user: {
           select: { id: true, firstName: true, lastName: true, phone: true },
@@ -420,22 +433,22 @@ async function getMemberSavings(req, res, next) {
     const results = await Promise.all(
       memberships.map(async (m) => {
         const stored = parseFloat(m.memberSavings?.toString() ?? '0');
-        let savings  = stored;
+        let savings = stored;
 
         if (stored === 0) {
           const agg = await prisma.contribution.aggregate({
             where: { groupId, userId: m.userId, status: 'CONFIRMED' },
-            _sum:  { amount: true },
+            _sum: { amount: true },
           });
           savings = parseFloat(agg._sum.amount?.toString() ?? '0');
         }
 
         return {
-          userId:   m.user.id,
+          userId: m.user.id,
           userName: `${m.user.firstName} ${m.user.lastName}`.trim(),
           userPhone: m.user.phone,
-          role:     m.role,
-          amount:   savings,
+          role: m.role,
+          amount: savings,
         };
       })
     );
@@ -466,7 +479,7 @@ async function updateMember(req, res, next) {
     const updated = await prisma.groupMembership.update({
       where: { groupId_userId: { groupId, userId } },
       data: {
-        ...(role   && { role:   role.toUpperCase() }),
+        ...(role && { role: role.toUpperCase() }),
         ...(status && { status: status.toUpperCase() }),
       },
     });
@@ -491,7 +504,7 @@ async function removeMember(req, res, next) {
 
     await prisma.groupMembership.update({
       where: { groupId_userId: { groupId, userId } },
-      data:  { status: 'INACTIVE' },
+      data: { status: 'INACTIVE' },
     });
 
     return sendSuccess(res, {}, 'Member removed');
@@ -509,7 +522,7 @@ async function searchMemberByPhone(req, res, next) {
     if (!normalized) throw new AppError('Invalid Malawi phone number', 400);
 
     const user = await prisma.user.findUnique({
-      where:  { phone: normalized },
+      where: { phone: normalized },
       select: { id: true, firstName: true, lastName: true, phone: true, avatarUrl: true },
     });
 
@@ -521,14 +534,14 @@ async function searchMemberByPhone(req, res, next) {
     let groupName = null;
     if (membership) {
       const group = await prisma.group.findUnique({
-        where:  { id: membership.groupId },
+        where: { id: membership.groupId },
         select: { name: true },
       });
       groupName = group?.name ?? null;
     }
 
     return sendSuccess(res, {
-      found:          true,
+      found: true,
       user,
       alreadyInGroup: !!membership,
       groupName,
