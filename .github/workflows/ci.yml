@@ -118,17 +118,13 @@ jobs:
     if: github.ref == 'refs/heads/main'
     environment: staging
     steps:
-      - name: Deploy to staging server
+      - name: Trigger Render deploy
         uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
-          script: |
-            cd /opt/tisunga
-            docker compose pull api
-            docker compose up -d api
-            docker compose run --rm migrate
+        run: | 
+          curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" \
+            -H "Content-Type: application/json" \
+            --silent --show-error
+          echo "✅ Render deploy triggered"
 
   deploy-production:
     name: Deploy to Production
@@ -137,15 +133,8 @@ jobs:
     if: github.event_name == 'release'
     environment: production
     steps:
-      - name: Deploy to production server
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.PRODUCTION_HOST }}
-          username: ${{ secrets.PRODUCTION_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_KEY }}
-          script: |
-            cd /opt/tisunga
-            docker compose pull api
-            docker compose up -d api
-            docker compose run --rm migrate
-            echo "TISUNGA v${{ github.ref_name }} deployed to production"
+      - name: Trigger Render deploy
+        run: curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" \
+            -H "Content-Type: application/json" \
+            --silent --show-error
+          echo "✅ Render deploy triggered"
