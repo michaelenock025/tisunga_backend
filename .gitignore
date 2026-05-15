@@ -10,3 +10,4 @@ Thumbs.db
 .vscode/
 .idea/
 prisma/migrations/*.sql.bak
+prisma/migrations/20260514200444_add_total_borrowed

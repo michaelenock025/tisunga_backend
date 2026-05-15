@@ -33,7 +33,7 @@ class AfricasTalkingProvider {
 
     const data = await response.json();
     const recipients = data?.SMSMessageData?.Recipients;
-    if (!recipients?.length || recipients[0].statusCode !== 101) {
+    if (!recipients?.length || recipients[0].statusCode !== 101 && recipients[0].statusCode !== 100) {
       throw new Error(`SMS not delivered: ${JSON.stringify(data)}`);
     }
 
